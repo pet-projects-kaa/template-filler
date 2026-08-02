@@ -59,6 +59,33 @@
 
             <div id="presetDescription" class="preset-description"></div>
 
+            <section class="custom-font-panel" aria-labelledby="customFontsTitle">
+                <div class="custom-font-heading">
+                    <div>
+                        <strong id="customFontsTitle">Собственные шрифты</strong>
+                        <small>TTF, OTF, WOFF или WOFF2 · до 8 МБ</small>
+                    </div>
+                </div>
+
+                <div class="custom-font-form">
+                    <label class="compact-input-field">
+                        <span>Название</span>
+                        <input id="customFontName" maxlength="80" placeholder="Например: Мой почерк">
+                    </label>
+
+                    <label class="font-file-picker">
+                        <input id="customFontFile" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
+                        <span id="customFontFileLabel">Выбрать файл</span>
+                    </label>
+
+                    <button id="uploadFontButton" class="button secondary wide" type="button">Добавить шрифт</button>
+                    <div id="fontUploadStatus" class="font-upload-status" role="status" aria-live="polite"></div>
+                </div>
+
+                <div id="customFontsList" class="custom-font-list"></div>
+                <p class="custom-font-note">Загружайте только файлы, которые вам разрешено использовать. Шрифты сохраняются в базе приложения и доступны после входа с любого устройства.</p>
+            </section>
+
             <div class="two-columns">
                 <label class="field">
                     <span>Бумага</span>

@@ -179,3 +179,189 @@ output { color: #6557ce; font-variant-numeric: tabular-nums; }
     .primary-actions { flex-direction: column; }
     textarea { min-height: 230px; }
 }
+
+.custom-font-panel {
+    margin: 0 0 18px;
+    padding: 14px;
+    border: 1px solid #dde2ea;
+    border-radius: 12px;
+    background: #fbfcfe;
+}
+
+.custom-font-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.custom-font-heading strong,
+.custom-font-heading small {
+    display: block;
+}
+
+.custom-font-heading strong {
+    color: #3f4755;
+    font-size: 13px;
+}
+
+.custom-font-heading small {
+    margin-top: 3px;
+    color: #858d99;
+    font-size: 11px;
+}
+
+.custom-font-form {
+    display: grid;
+    gap: 9px;
+}
+
+.compact-input-field {
+    display: block;
+}
+
+.compact-input-field > span {
+    display: block;
+    margin-bottom: 6px;
+    color: #596271;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.compact-input-field input {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #d3d9e3;
+    border-radius: 9px;
+    background: #fff;
+    padding: 0 11px;
+    color: #252a34;
+}
+
+.compact-input-field input:focus {
+    outline: none;
+    border-color: #6759db;
+    box-shadow: 0 0 0 4px rgba(103, 89, 219, .10);
+}
+
+.font-file-picker {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px dashed #aeb6c4;
+    border-radius: 9px;
+    background: #fff;
+    color: #5b6370;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.font-file-picker:hover {
+    border-color: #6759db;
+    color: #574cc1;
+}
+
+.font-file-picker input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.font-upload-status {
+    min-height: 16px;
+    color: #6e7786;
+    font-size: 11px;
+}
+
+.font-upload-status.error {
+    color: #b42318;
+}
+
+.custom-font-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.custom-font-empty {
+    padding: 10px;
+    border-radius: 9px;
+    background: #f4f6f9;
+    color: #848d9a;
+    font-size: 11px;
+    text-align: center;
+}
+
+.custom-font-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #e1e5eb;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.custom-font-preview {
+    min-width: 0;
+}
+
+.custom-font-preview strong,
+.custom-font-preview small,
+.custom-font-sample {
+    display: block;
+}
+
+.custom-font-preview strong {
+    overflow: hidden;
+    color: #3e4654;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom-font-preview small {
+    margin-top: 2px;
+    color: #8a929e;
+    font-size: 10px;
+}
+
+.custom-font-sample {
+    margin-top: 5px;
+    overflow: hidden;
+    color: #2450a4;
+    font-size: 22px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom-font-delete {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff0f0;
+    color: #b42318;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.custom-font-delete:hover {
+    background: #ffe3e3;
+}
+
+.custom-font-note {
+    margin: 10px 0 0;
+    color: #8a929e;
+    font-size: 10px;
+    line-height: 1.45;
+}

@@ -133,6 +133,9 @@ const PRESETS = [
     }
 ];
 
+let customFonts = [];
+const customFontFaces = new Map();
+
 const INKS = {
     blue: { color: "#2251a4", alphaMin: .64, alphaMax: .90, weakChance: .06, overlay: .16, jitter: 7 },
     "dark-blue": { color: "#173d84", alphaMin: .70, alphaMax: .94, weakChance: .04, overlay: .18, jitter: 5 },
@@ -146,6 +149,12 @@ const elements = {
     sourceText: document.getElementById("sourceText"),
     preset: document.getElementById("preset"),
     presetDescription: document.getElementById("presetDescription"),
+    customFontName: document.getElementById("customFontName"),
+    customFontFile: document.getElementById("customFontFile"),
+    customFontFileLabel: document.getElementById("customFontFileLabel"),
+    uploadFontButton: document.getElementById("uploadFontButton"),
+    fontUploadStatus: document.getElementById("fontUploadStatus"),
+    customFontsList: document.getElementById("customFontsList"),
     paperStyle: document.getElementById("paperStyle"),
     inkStyle: document.getElementById("inkStyle"),
     fontSize: document.getElementById("fontSize"),
@@ -183,6 +192,7 @@ async function initialize() {
             return;
         }
 
+        await loadCustomFonts();
         populatePresets();
         restoreSettings();
         wireEvents();
@@ -199,13 +209,145 @@ async function initialize() {
     }
 }
 
-function populatePresets() {
+function populatePresets(preferredValue = null) {
+    const currentValue = preferredValue || elements.preset.value;
+    elements.preset.replaceChildren();
+
+    const builtInGroup = document.createElement("optgroup");
+    builtInGroup.label = "Встроенные почерки";
     for (const item of PRESETS) {
         const option = document.createElement("option");
         option.value = item.id;
         option.textContent = item.name;
-        elements.preset.append(option);
+        builtInGroup.append(option);
     }
+    elements.preset.append(builtInGroup);
+
+    const availableCustomFonts = customFonts.filter(item => item.loaded);
+    if (availableCustomFonts.length > 0) {
+        const customGroup = document.createElement("optgroup");
+        customGroup.label = "Мои шрифты";
+        for (const font of availableCustomFonts) {
+            const option = document.createElement("option");
+            option.value = `custom:${font.id}`;
+            option.textContent = font.name;
+            customGroup.append(option);
+        }
+        elements.preset.append(customGroup);
+    }
+
+    const values = Array.from(elements.preset.options).map(option => option.value);
+    elements.preset.value = values.includes(currentValue) ? currentValue : PRESETS[0].id;
+}
+
+async function loadCustomFonts() {
+    setFontUploadStatus("Загружаем список шрифтов…");
+    try {
+        const response = await fetch("api/fonts", { credentials: "same-origin" });
+        if (!response.ok) {
+            throw new Error(await readApiError(response));
+        }
+
+        const records = await response.json();
+        customFonts = await Promise.all(records.map(registerCustomFont));
+        renderCustomFontList();
+        setFontUploadStatus(customFonts.length ? "" : "Собственные шрифты пока не загружены.");
+    } catch (error) {
+        console.error(error);
+        customFonts = [];
+        renderCustomFontList();
+        setFontUploadStatus(error.message || "Не удалось получить список шрифтов.", true);
+    }
+}
+
+async function registerCustomFont(record) {
+    const family = `UserFont_${String(record.id).replaceAll("-", "_")}`;
+    const previous = customFontFaces.get(record.id);
+    if (previous) {
+        document.fonts.delete(previous);
+        customFontFaces.delete(record.id);
+    }
+
+    try {
+        const source = `url("api/fonts/${encodeURIComponent(record.id)}/file?v=${encodeURIComponent(record.createdAt)}")`;
+        const face = new FontFace(family, source, { style: "normal", weight: "400" });
+        await face.load();
+        document.fonts.add(face);
+        customFontFaces.set(record.id, face);
+        return { ...record, family, loaded: true, loadError: null };
+    } catch (error) {
+        console.error(`Не удалось загрузить шрифт ${record.name}`, error);
+        return { ...record, family, loaded: false, loadError: "Браузер не смог прочитать этот файл" };
+    }
+}
+
+function renderCustomFontList() {
+    elements.customFontsList.replaceChildren();
+    if (customFonts.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "custom-font-empty";
+        empty.textContent = "Здесь появятся загруженные шрифты.";
+        elements.customFontsList.append(empty);
+        return;
+    }
+
+    for (const font of customFonts) {
+        const item = document.createElement("div");
+        item.className = "custom-font-item";
+
+        const preview = document.createElement("div");
+        preview.className = "custom-font-preview";
+
+        const title = document.createElement("strong");
+        title.textContent = font.name;
+
+        const meta = document.createElement("small");
+        meta.textContent = font.loaded
+            ? `${font.fileExtension.toUpperCase()} · ${formatBytes(font.sizeBytes)}`
+            : font.loadError;
+
+        const sample = document.createElement("span");
+        sample.className = "custom-font-sample";
+        sample.textContent = "Пример рукописного конспекта";
+        if (font.loaded) {
+            sample.style.fontFamily = `"${font.family}", cursive`;
+        }
+
+        preview.append(title, meta, sample);
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "custom-font-delete";
+        remove.title = `Удалить шрифт «${font.name}»`;
+        remove.setAttribute("aria-label", remove.title);
+        remove.textContent = "×";
+        remove.addEventListener("click", () => deleteCustomFont(font));
+
+        item.append(preview, remove);
+        elements.customFontsList.append(item);
+    }
+}
+
+function customPresetFromFont(font) {
+    return {
+        id: `custom:${font.id}`,
+        name: font.name,
+        description: "Ваш загруженный шрифт. Естественные отклонения строк и неоднородность ручки применяются поверх него.",
+        font: font.family,
+        sizeScale: 1,
+        compress: .96,
+        slant: -.035,
+        wordSpacing: -.15,
+        rotation: .012,
+        baselineJitter: .85,
+        widthJitter: .024,
+        alpha: .86,
+        defaultSize: 30,
+        defaultLineHeight: 51,
+        defaultNaturalness: 55,
+        defaultInk: "blue",
+        isCustom: true
+    };
 }
 
 function wireEvents() {
@@ -215,6 +357,15 @@ function wireEvents() {
         saveSettings();
         scheduleRender(80);
     });
+
+    elements.customFontFile.addEventListener("change", () => {
+        const file = elements.customFontFile.files?.[0];
+        elements.customFontFileLabel.textContent = file ? file.name : "Выбрать файл";
+        if (file && !elements.customFontName.value.trim()) {
+            elements.customFontName.value = file.name.replace(/\.[^.]+$/, "");
+        }
+    });
+    elements.uploadFontButton.addEventListener("click", uploadCustomFont);
 
     [elements.paperStyle, elements.inkStyle, elements.recognizeHeadings].forEach(input => {
         input.addEventListener("change", () => {
@@ -246,6 +397,126 @@ function wireEvents() {
     elements.printButton.addEventListener("click", printPages);
 }
 
+async function uploadCustomFont() {
+    const file = elements.customFontFile.files?.[0];
+    if (!file) {
+        setFontUploadStatus("Сначала выберите файл шрифта.", true);
+        return;
+    }
+
+    const allowedExtensions = [".ttf", ".otf", ".woff", ".woff2"];
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (!allowedExtensions.includes(extension)) {
+        setFontUploadStatus("Поддерживаются только TTF, OTF, WOFF и WOFF2.", true);
+        return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+        setFontUploadStatus("Файл должен быть не больше 8 МБ.", true);
+        return;
+    }
+
+    elements.uploadFontButton.disabled = true;
+    setFontUploadStatus("Загружаем и проверяем шрифт…");
+    try {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("name", elements.customFontName.value.trim());
+
+        const response = await fetch("api/fonts", {
+            method: "POST",
+            credentials: "same-origin",
+            body: form
+        });
+        if (!response.ok) {
+            throw new Error(await readApiError(response));
+        }
+
+        const created = await response.json();
+        const registered = await registerCustomFont(created);
+        customFonts = [registered, ...customFonts.filter(item => item.id !== registered.id)];
+        renderCustomFontList();
+        populatePresets(`custom:${registered.id}`);
+        elements.customFontFile.value = "";
+        elements.customFontName.value = "";
+        elements.customFontFileLabel.textContent = "Выбрать файл";
+
+        if (!registered.loaded) {
+            throw new Error(registered.loadError || "Браузер не смог прочитать шрифт.");
+        }
+
+        applyPresetDefaults();
+        updatePresetDescription();
+        saveSettings();
+        setFontUploadStatus(`Шрифт «${registered.name}» добавлен и выбран.`);
+        await renderDocument();
+    } catch (error) {
+        console.error(error);
+        setFontUploadStatus(error.message || "Не удалось загрузить шрифт.", true);
+    } finally {
+        elements.uploadFontButton.disabled = false;
+    }
+}
+
+async function deleteCustomFont(font) {
+    if (!confirm(`Удалить шрифт «${font.name}»?`)) {
+        return;
+    }
+
+    setFontUploadStatus(`Удаляем «${font.name}»…`);
+    try {
+        const response = await fetch(`api/fonts/${encodeURIComponent(font.id)}`, {
+            method: "DELETE",
+            credentials: "same-origin"
+        });
+        if (!response.ok && response.status !== 404) {
+            throw new Error(await readApiError(response));
+        }
+
+        const face = customFontFaces.get(font.id);
+        if (face) {
+            document.fonts.delete(face);
+            customFontFaces.delete(font.id);
+        }
+
+        const selectedWasDeleted = elements.preset.value === `custom:${font.id}`;
+        customFonts = customFonts.filter(item => item.id !== font.id);
+        renderCustomFontList();
+        populatePresets(selectedWasDeleted ? PRESETS[0].id : elements.preset.value);
+        if (selectedWasDeleted) {
+            applyPresetDefaults();
+            updatePresetDescription();
+            saveSettings();
+            await renderDocument();
+        }
+        setFontUploadStatus("Шрифт удалён.");
+    } catch (error) {
+        console.error(error);
+        setFontUploadStatus(error.message || "Не удалось удалить шрифт.", true);
+    }
+}
+
+function setFontUploadStatus(message, isError = false) {
+    elements.fontUploadStatus.textContent = message;
+    elements.fontUploadStatus.classList.toggle("error", isError);
+}
+
+async function readApiError(response) {
+    try {
+        const data = await response.json();
+        return data?.error || `Ошибка ${response.status}`;
+    } catch {
+        return `Ошибка ${response.status}`;
+    }
+}
+
+function formatBytes(value) {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return `${bytes} Б`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
 function scheduleRender(delay) {
     clearTimeout(renderTimer);
     renderTimer = setTimeout(renderDocument, delay);
@@ -261,6 +532,14 @@ async function loadFonts() {
 }
 
 function getPreset() {
+    if (elements.preset.value.startsWith("custom:")) {
+        const fontId = elements.preset.value.slice("custom:".length);
+        const font = customFonts.find(item => item.id === fontId && item.loaded);
+        if (font) {
+            return customPresetFromFont(font);
+        }
+    }
+
     return PRESETS.find(item => item.id === elements.preset.value) || PRESETS[0];
 }
 
