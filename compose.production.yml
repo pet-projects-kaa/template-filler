@@ -1,3 +1,5 @@
+name: template-filler
+
 services:
   template-filler:
     build:
@@ -11,9 +13,11 @@ services:
     volumes:
       - ./data:/app/App_Data
     networks:
-      - caddy-web
+      proxy:
+        aliases:
+          - template-filler
 
 networks:
-  caddy-web:
+  proxy:
     external: true
-    name: vk-friends-monitor_web
+    name: shared-proxy

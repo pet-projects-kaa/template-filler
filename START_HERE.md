@@ -1,18 +1,30 @@
-# Что сделать сейчас
+# TemplateFiller: деплой через общий reverse proxy
 
-1. Создай пустой репозиторий GitHub, например `template-filler`.
-2. Загрузи **всё содержимое** этой папки в корень репозитория, включая скрытую папку `.github`.
-3. Добавь Actions secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
-4. Сделай commit в ветку `main`.
+Перед первым деплоем должен быть выполнен комплект `reverse-proxy-migration.zip`.
 
-После commit автоматически запустится workflow **Deploy TemplateFiller**.
+Приложение подключается к внешней Docker-сети:
 
-Готовое приложение:
+```text
+shared-proxy
+```
+
+Workflow больше не изменяет Caddyfile другого проекта. Он только:
+
+1. загружает приложение;
+2. собирает контейнер;
+3. запускает его в `shared-proxy`;
+4. проверяет локальный и публичный health-check.
+
+GitHub Secrets:
+
+```text
+VPS_HOST
+VPS_USER
+VPS_SSH_KEY
+```
+
+Публичный адрес:
 
 ```text
 https://annushkaaaaa.store/templates/
 ```
-
-Проверка workflow:
-
-`Repository → Actions → Deploy TemplateFiller`

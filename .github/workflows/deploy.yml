@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate required secrets
         shell: bash
@@ -44,22 +44,25 @@ jobs:
           test -f TemplateFiller.csproj
           test -f Dockerfile
           test -f compose.production.yml
-          test -f deploy/configure-caddy.py
           node --check wwwroot/app.js
-          python3 -m py_compile deploy/configure-caddy.py
 
       - name: Pack release
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE_ARCHIVE="$RUNNER_TEMP/$ARCHIVE_NAME"
+
           tar \
             --exclude='.git' \
             --exclude='./data' \
             --exclude='./App_Data/templates.json' \
             --exclude='./bin' \
             --exclude='./obj' \
-            --exclude='*.tar.gz' \
-            -czf "$ARCHIVE_NAME" .
+            -czf "$RELEASE_ARCHIVE" \
+            -C "$GITHUB_WORKSPACE" .
+
+          test -s "$RELEASE_ARCHIVE"
+          echo "RELEASE_ARCHIVE=$RELEASE_ARCHIVE" >> "$GITHUB_ENV"
 
       - name: Configure SSH
         shell: bash
@@ -80,7 +83,7 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           set -euo pipefail
-          scp "$ARCHIVE_NAME" "$VPS_USER@$VPS_HOST:/tmp/$ARCHIVE_NAME"
+          scp "$RELEASE_ARCHIVE" "$VPS_USER@$VPS_HOST:/tmp/$ARCHIVE_NAME"
 
       - name: Activate release
         shell: bash
@@ -94,10 +97,6 @@ jobs:
           set -euo pipefail
 
           APP_DIR="$HOME/apps/template-filler"
-          CADDY_PROJECT_DIR="/opt/vk-friends-monitor"
-          CADDYFILE="$CADDY_PROJECT_DIR/Caddyfile"
-          CADDYFILE_BACKUP="/tmp/Caddyfile.template-filler.backup.$$"
-          CADDYFILE_CANDIDATE="/tmp/Caddyfile.template-filler.candidate.$$"
 
           docker_cmd() {
             if docker info >/dev/null 2>&1; then
@@ -105,7 +104,7 @@ jobs:
             elif sudo -n docker info >/dev/null 2>&1; then
               sudo -n docker "$@"
             else
-              echo "User $(whoami) cannot run Docker. Add it to the docker group or grant passwordless Docker sudo." >&2
+              echo "User $(whoami) cannot run Docker." >&2
               return 1
             fi
           }
@@ -121,80 +120,8 @@ jobs:
             fi
           }
 
-          copy_protected_file() {
-            local source="$1"
-            local destination="$2"
-            local source_dir source_name destination_dir destination_name
-
-            source_dir="$(dirname "$source")"
-            source_name="$(basename "$source")"
-            destination_dir="$(dirname "$destination")"
-            destination_name="$(basename "$destination")"
-
-            docker_cmd run --rm \
-              --entrypoint /bin/sh \
-              -e SOURCE_NAME="$source_name" \
-              -e DESTINATION_NAME="$destination_name" \
-              -e HOST_UID="$(id -u)" \
-              -e HOST_GID="$(id -g)" \
-              -v "$source_dir:/source:ro" \
-              -v "$destination_dir:/destination" \
-              template-filler:latest \
-              -c 'cat "/source/$SOURCE_NAME" > "/destination/$DESTINATION_NAME" && chown "$HOST_UID:$HOST_GID" "/destination/$DESTINATION_NAME"'
-          }
-
-          read_file() {
-            local source="$1"
-            local destination="$2"
-
-            if test -r "$source"; then
-              cp "$source" "$destination"
-              return
-            fi
-
-            copy_protected_file "$source" "$destination"
-          }
-
-          install_file() {
-            local source="$1"
-            local destination="$2"
-            local source_dir source_name destination_dir destination_name
-
-            if test -w "$destination" || test -w "$(dirname "$destination")"; then
-              cp "$source" "$destination"
-              return
-            fi
-
-            # Docker access is already required for deployment and can safely update
-            # the bind-mounted Caddyfile without an interactive sudo prompt.
-            source_dir="$(dirname "$source")"
-            source_name="$(basename "$source")"
-            destination_dir="$(dirname "$destination")"
-            destination_name="$(basename "$destination")"
-
-            if docker_cmd run --rm \
-              --entrypoint /bin/sh \
-              -e SOURCE_NAME="$source_name" \
-              -e DESTINATION_NAME="$destination_name" \
-              -v "$source_dir:/source:ro" \
-              -v "$destination_dir:/destination" \
-              template-filler:latest \
-              -c 'cat "/source/$SOURCE_NAME" > "/destination/$DESTINATION_NAME"'; then
-              return
-            fi
-
-            if sudo -n true >/dev/null 2>&1; then
-              sudo -n install -m 0644 "$source" "$destination"
-              return
-            fi
-
-            echo "Cannot update $destination automatically." >&2
-            return 1
-          }
-
           mkdir -p "$APP_DIR/data"
 
-          # Replace application files while preserving the persistent data directory.
           find "$APP_DIR" \
             -mindepth 1 \
             -maxdepth 1 \
@@ -204,24 +131,13 @@ jobs:
           tar -xzf "$ARCHIVE_PATH" -C "$APP_DIR"
           rm -f "$ARCHIVE_PATH"
 
-          docker_cmd network inspect vk-friends-monitor_web >/dev/null
+          docker_cmd network inspect shared-proxy >/dev/null || {
+            echo "Docker network shared-proxy does not exist. Run the reverse-proxy migration first." >&2
+            exit 1
+          }
 
           cd "$APP_DIR"
-          compose_cmd -f compose.production.yml build
-
-          existing_container="$(docker_cmd ps -aq --filter 'name=^/template-filler$')"
-          if test -n "$existing_container"; then
-            existing_workdir="$(docker_cmd inspect \
-              --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' \
-              "$existing_container" 2>/dev/null || true)"
-
-            if test "$existing_workdir" != "$APP_DIR"; then
-              echo "Removing a legacy TemplateFiller container from $existing_workdir"
-              docker_cmd rm -f "$existing_container"
-            fi
-          fi
-
-          compose_cmd -f compose.production.yml up -d --remove-orphans
+          compose_cmd -f compose.production.yml up -d --build
           docker_cmd image prune -f
 
           for attempt in $(seq 1 45); do
@@ -235,46 +151,8 @@ jobs:
               compose_cmd -f compose.production.yml logs --tail=200 template-filler
               exit 1
             fi
-
             sleep 2
           done
-
-          # Add the /templates route to the existing Caddyfile idempotently.
-          test -f "$CADDYFILE" || {
-            echo "Caddyfile was not found at $CADDYFILE" >&2
-            exit 1
-          }
-
-          read_file "$CADDYFILE" "$CADDYFILE_BACKUP"
-
-          python3 "$APP_DIR/deploy/configure-caddy.py" \
-            "$CADDYFILE_BACKUP" \
-            "$CADDYFILE_CANDIDATE" \
-            --domain annushkaaaaa.store
-
-          if ! cmp -s "$CADDYFILE_CANDIDATE" "$CADDYFILE_BACKUP"; then
-            install_file "$CADDYFILE_CANDIDATE" "$CADDYFILE"
-          fi
-
-          cd "$CADDY_PROJECT_DIR"
-          if ! compose_cmd -f compose.production.yml exec -T caddy \
-            caddy validate --config /etc/caddy/Caddyfile; then
-            echo "Caddy validation failed. Restoring the previous Caddyfile." >&2
-            install_file "$CADDYFILE_BACKUP" "$CADDYFILE"
-            rm -f "$CADDYFILE_BACKUP" "$CADDYFILE_CANDIDATE"
-            exit 1
-          fi
-
-          if ! compose_cmd -f compose.production.yml exec -T caddy \
-            caddy reload --config /etc/caddy/Caddyfile; then
-            echo "Caddy reload failed. Restoring the previous Caddyfile." >&2
-            install_file "$CADDYFILE_BACKUP" "$CADDYFILE"
-            compose_cmd -f compose.production.yml exec -T caddy \
-              caddy reload --config /etc/caddy/Caddyfile || true
-            rm -f "$CADDYFILE_BACKUP" "$CADDYFILE_CANDIDATE"
-            exit 1
-          fi
-          rm -f "$CADDYFILE_BACKUP" "$CADDYFILE_CANDIDATE"
 
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error \
@@ -286,7 +164,10 @@ jobs:
           done
 
           echo "The container is healthy, but the public URL health check failed." >&2
-          compose_cmd -f compose.production.yml ps
-          compose_cmd -f compose.production.yml logs --tail=100 caddy
+          PROXY_CONTAINER="$(docker_cmd ps \
+            --filter 'label=com.docker.compose.project=reverse-proxy' \
+            --filter 'label=com.docker.compose.service=caddy' \
+            --format '{{.Names}}' | head -n1)"
+          test -z "$PROXY_CONTAINER" || docker_cmd logs --tail=200 "$PROXY_CONTAINER"
           exit 1
           REMOTE
