@@ -7,15 +7,20 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-shell">
+<div id="appShell" class="app-shell hidden">
     <header class="app-header">
         <div>
             <h1>Набивалка шаблонов</h1>
-            <p>Создавайте документы, превращайте прочерки в поля и заполняйте их.</p>
+            <p>Создавайте, заполняйте и выгружайте документы в Word.</p>
         </div>
         <div class="header-actions">
             <span id="saveStatus" class="save-status">Готово</span>
             <button id="saveButton" class="button primary" type="button">Сохранить</button>
+            <div class="user-menu">
+                <span id="currentUser" class="current-user"></span>
+                <button id="changePasswordButton" class="button subtle" type="button">Сменить пароль</button>
+                <button id="logoutButton" class="button subtle danger-text" type="button">Выйти</button>
+            </div>
         </div>
     </header>
 
@@ -43,7 +48,7 @@
 
             <div class="mode-tabs" role="tablist" aria-label="Режим работы">
                 <button id="editorTab" class="mode-tab active" type="button" role="tab" aria-selected="true">Редактор</button>
-                <button id="fillTab" class="mode-tab" type="button" role="tab" aria-selected="false">Заполнение</button>
+                <button id="fillTab" class="mode-tab" type="button" role="tab" aria-selected="false">Заполнение и правка</button>
             </div>
 
             <section id="editorView" class="view-panel">
@@ -108,25 +113,78 @@
             <section id="fillView" class="view-panel hidden">
                 <div class="fill-actions">
                     <div>
-                        <strong>Заполните поля прямо в документе</strong>
+                        <strong>Заполняйте поля и редактируйте текст прямо в документе</strong>
                         <span id="fieldCount" class="field-count"></span>
+                        <span id="fillEditStatus" class="fill-edit-status">Текст шаблона не изменён</span>
                     </div>
                     <div class="fill-buttons">
                         <button id="resetFillButton" class="button" type="button">Очистить поля</button>
+                        <button id="saveFillTemplateButton" class="button accent" type="button">Сохранить правки шаблона</button>
+                        <button id="wordButton" class="button" type="button">Экспорт в Word</button>
                         <button id="printButton" class="button primary" type="button">Печать / PDF</button>
                     </div>
                 </div>
                 <div class="page-stage fill-stage">
-                    <article id="fillDocument" class="document-page fill-document" aria-label="Заполнение шаблона"></article>
+                    <article id="fillDocument" class="document-page fill-document" contenteditable="true" spellcheck="true" aria-label="Заполнение и редактирование шаблона"></article>
                 </div>
+                <p class="editor-hint">
+                    Обычный текст можно исправлять прямо здесь. Кнопка «Сохранить правки шаблона» сохранит изменения текста,
+                    но введённые значения полей останутся только в текущем документе.
+                </p>
             </section>
         </main>
     </div>
 </div>
 
-<div id="emptyState" class="empty-state hidden">
-    <strong>Шаблонов пока нет</strong>
-    <span>Создайте первый шаблон и вставьте в него текст.</span>
+<div id="loginOverlay" class="modal-overlay">
+    <form id="loginForm" class="modal-card auth-card">
+        <div class="modal-title-row">
+            <div>
+                <h2>Вход</h2>
+                <p>Авторизуйтесь для работы с шаблонами.</p>
+            </div>
+        </div>
+        <label class="form-field">
+            <span>Логин</span>
+            <input id="loginUsername" autocomplete="username" required>
+        </label>
+        <label class="form-field">
+            <span>Пароль</span>
+            <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <label class="checkbox-field">
+            <input id="loginRemember" type="checkbox" checked>
+            <span>Оставаться в системе</span>
+        </label>
+        <div id="loginError" class="form-error" role="alert"></div>
+        <button id="loginButton" class="button primary wide" type="submit">Войти</button>
+    </form>
+</div>
+
+<div id="passwordOverlay" class="modal-overlay hidden">
+    <form id="passwordForm" class="modal-card auth-card">
+        <div class="modal-title-row">
+            <div>
+                <h2>Смена пароля</h2>
+                <p id="passwordDialogHint">Укажите текущий и новый пароль.</p>
+            </div>
+            <button id="closePasswordButton" class="icon-button" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <label class="form-field">
+            <span>Текущий пароль</span>
+            <input id="currentPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <label class="form-field">
+            <span>Новый пароль</span>
+            <input id="newPassword" type="password" minlength="8" autocomplete="new-password" required>
+        </label>
+        <label class="form-field">
+            <span>Повторите новый пароль</span>
+            <input id="confirmPassword" type="password" minlength="8" autocomplete="new-password" required>
+        </label>
+        <div id="passwordError" class="form-error" role="alert"></div>
+        <button class="button primary wide" type="submit">Сохранить новый пароль</button>
+    </form>
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

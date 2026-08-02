@@ -4,9 +4,15 @@ obj/
 .idea/
 *.user
 *.suo
+
+App_Data/*.db
+App_Data/*.db-shm
+App_Data/*.db-wal
 App_Data/templates.json
+App_Data/templates.json.migrated
 App_Data/*.tmp
 App_Data/*.broken-*
 
 data/
 *.tar.gz
+*.zip

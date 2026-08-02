@@ -16,3 +16,39 @@ public sealed record TemplateListItem(
     string Name,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
+
+public sealed record LoginRequest(string Username, string Password, bool RememberMe = true);
+
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+public sealed record AuthUserResponse(string Username, bool MustChangePassword);
+
+public sealed record UserAuthRecord(
+    Guid Id,
+    string Username,
+    byte[] PasswordHash,
+    byte[] PasswordSalt,
+    int PasswordIterations,
+    bool MustChangePassword);
+
+public sealed record WordExportRequest(string? FileName, IReadOnlyList<WordBlock>? Blocks);
+
+public sealed record WordBlock(
+    string Kind,
+    WordParagraph? Paragraph,
+    IReadOnlyList<IReadOnlyList<WordParagraph>>? Rows);
+
+public sealed record WordParagraph(
+    string? Alignment,
+    int? HeadingLevel,
+    IReadOnlyList<WordRun>? Runs);
+
+public sealed record WordRun(
+    string? Text,
+    bool Bold,
+    bool Italic,
+    bool Underline,
+    bool Strike,
+    int? FontSize,
+    string? Color,
+    bool Break = false);
