@@ -251,7 +251,16 @@ function showLogin(message = "") {
     elements.passwordOverlay.classList.add("hidden");
     elements.loginOverlay.classList.remove("hidden");
     elements.loginError.textContent = message;
-    setTimeout(() => elements.loginUsername.focus(), 0);
+    if (!elements.loginUsername.value) {
+        elements.loginUsername.value = "01";
+    }
+    setTimeout(() => {
+        if (elements.loginUsername.value) {
+            elements.loginPassword.focus();
+        } else {
+            elements.loginUsername.focus();
+        }
+    }, 0);
 }
 
 async function logout() {

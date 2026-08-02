@@ -136,28 +136,35 @@
     </div>
 </div>
 
-<div id="loginOverlay" class="modal-overlay">
-    <form id="loginForm" class="modal-card auth-card">
-        <div class="modal-title-row">
+<div id="loginOverlay" class="modal-overlay auth-overlay">
+    <form id="loginForm" class="auth-login-card">
+        <div class="auth-login-banner">
+            <div class="auth-logo-mark" aria-hidden="true">✦</div>
             <div>
-                <h2>Вход</h2>
-                <p>Авторизуйтесь для работы с шаблонами.</p>
+                <h2>Набивалка шаблонов</h2>
+                <p>Войдите, чтобы продолжить работу</p>
             </div>
         </div>
-        <label class="form-field">
-            <span>Логин</span>
-            <input id="loginUsername" autocomplete="username" required>
-        </label>
-        <label class="form-field">
-            <span>Пароль</span>
-            <input id="loginPassword" type="password" autocomplete="current-password" required>
-        </label>
-        <label class="checkbox-field">
-            <input id="loginRemember" type="checkbox" checked>
-            <span>Оставаться в системе</span>
-        </label>
-        <div id="loginError" class="form-error" role="alert"></div>
-        <button id="loginButton" class="button primary wide" type="submit">Войти</button>
+
+        <div class="auth-login-body">
+            <label class="form-field auth-field">
+                <span>Логин</span>
+                <input id="loginUsername" autocomplete="username" inputmode="text" placeholder="Введите логин" required>
+            </label>
+
+            <label class="form-field auth-field">
+                <span>Пароль</span>
+                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Введите пароль" required>
+            </label>
+
+            <label class="checkbox-field auth-checkbox">
+                <input id="loginRemember" type="checkbox" checked>
+                <span>Оставаться в системе</span>
+            </label>
+
+            <div id="loginError" class="form-error auth-error" role="alert"></div>
+            <button id="loginButton" class="auth-submit" type="submit">Войти</button>
+        </div>
     </form>
 </div>
 

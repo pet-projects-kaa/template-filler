@@ -70,10 +70,16 @@ public sealed class AppDatabase
 
                 CREATE INDEX IF NOT EXISTS IX_Templates_UpdatedAt
                     ON Templates (UpdatedAt DESC);
+
+                CREATE TABLE IF NOT EXISTS AppMigrations (
+                    Name TEXT NOT NULL PRIMARY KEY,
+                    AppliedAt TEXT NOT NULL
+                );
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
 
             await SeedInitialUserAsync(connection, cancellationToken);
+            await RestoreInitialUserAccessAsync(connection, cancellationToken);
             await ImportLegacyTemplatesAsync(connection, cancellationToken);
             _initialized = true;
         }
@@ -307,6 +313,65 @@ public sealed class AppDatabase
         insertCommand.Parameters.AddWithValue("$createdAt", now);
         insertCommand.Parameters.AddWithValue("$updatedAt", now);
         await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+
+    private static async Task RestoreInitialUserAccessAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string migrationName = "2026-08-02-restore-initial-user-01";
+
+        await using var migrationExistsCommand = connection.CreateCommand();
+        migrationExistsCommand.CommandText =
+            "SELECT 1 FROM AppMigrations WHERE Name = $name LIMIT 1;";
+        migrationExistsCommand.Parameters.AddWithValue("$name", migrationName);
+
+        if (await migrationExistsCommand.ExecuteScalarAsync(cancellationToken) is not null)
+        {
+            return;
+        }
+
+        var (hash, salt, iterations) = PasswordHasher.Hash("pswd01");
+        var now = FormatDate(DateTimeOffset.UtcNow);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using (var restoreCommand = connection.CreateCommand())
+        {
+            restoreCommand.Transaction = (SqliteTransaction)transaction;
+            restoreCommand.CommandText = """
+                INSERT INTO Users
+                    (Id, Username, PasswordHash, PasswordSalt, PasswordIterations, MustChangePassword, CreatedAt, UpdatedAt)
+                VALUES
+                    ($id, '01', $hash, $salt, $iterations, 1, $createdAt, $updatedAt)
+                ON CONFLICT(Username) DO UPDATE SET
+                    PasswordHash = excluded.PasswordHash,
+                    PasswordSalt = excluded.PasswordSalt,
+                    PasswordIterations = excluded.PasswordIterations,
+                    MustChangePassword = 1,
+                    UpdatedAt = excluded.UpdatedAt;
+                """;
+            restoreCommand.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+            restoreCommand.Parameters.Add("$hash", SqliteType.Blob).Value = hash;
+            restoreCommand.Parameters.Add("$salt", SqliteType.Blob).Value = salt;
+            restoreCommand.Parameters.AddWithValue("$iterations", iterations);
+            restoreCommand.Parameters.AddWithValue("$createdAt", now);
+            restoreCommand.Parameters.AddWithValue("$updatedAt", now);
+            await restoreCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using (var markCommand = connection.CreateCommand())
+        {
+            markCommand.Transaction = (SqliteTransaction)transaction;
+            markCommand.CommandText =
+                "INSERT INTO AppMigrations (Name, AppliedAt) VALUES ($name, $appliedAt);";
+            markCommand.Parameters.AddWithValue("$name", migrationName);
+            markCommand.Parameters.AddWithValue("$appliedAt", now);
+            await markCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private async Task ImportLegacyTemplatesAsync(

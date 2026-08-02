@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using TemplateFiller.Export;
 using TemplateFiller.Models;
 using TemplateFiller.Security;
@@ -27,6 +28,7 @@ builder.Services
         options.Cookie.IsEssential = true;
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.Path = "/";
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
         options.SlidingExpiration = true;
         options.Events.OnRedirectToLogin = context =>
@@ -53,6 +55,13 @@ builder.Services
         };
     });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
@@ -70,6 +79,7 @@ var app = builder.Build();
 
 await app.Services.GetRequiredService<AppDatabase>().InitializeAsync();
 
+app.UseForwardedHeaders();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRateLimiter();
