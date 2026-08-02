@@ -5,19 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Набивалка шаблонов</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="login.css">
+    <link rel="stylesheet" href="navigation.css">
 </head>
 <body>
-<button id="menuButton" class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
-<div id="drawerBackdrop" class="drawer-backdrop"></div>
-<aside id="sideDrawer" class="side-drawer" aria-label="Разделы приложения">
-  <div class="drawer-head"><strong>Набивалка</strong><button id="menuCloseButton" class="drawer-close" type="button" aria-label="Закрыть">×</button></div>
-  <nav class="drawer-nav">
-    <a href="./" data-nav="templates"><span>▤</span><div><strong>Шаблоны</strong><small>Создание и заполнение документов</small></div></a>
-    <a href="handwriting.html" data-nav="handwriting"><span>✎</span><div><strong>Рукописный текст</strong><small>Текст на листе разными почерками</small></div></a>
-  </nav>
-</aside>
-
 <div id="appShell" class="app-shell hidden">
+    <button id="menuButton" class="app-menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
+    <div id="drawerBackdrop" class="app-drawer-backdrop"></div>
+    <aside id="sideDrawer" class="app-side-drawer" aria-label="Разделы приложения">
+        <div class="app-drawer-head">
+            <strong>Набивалка</strong>
+            <button id="menuCloseButton" class="app-drawer-close" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <nav class="app-drawer-nav">
+            <a class="active" href="./"><span>▤</span><div><strong>Шаблоны</strong><small>Документы и заполнение полей</small></div></a>
+            <a href="handwriting.html"><span>✎</span><div><strong>Рукописные конспекты</strong><small>Многостраничный текст на тетрадных листах</small></div></a>
+        </nav>
+    </aside>
+
     <header class="app-header">
         <div>
             <h1>Набивалка шаблонов</h1>
@@ -147,24 +152,39 @@
 </div>
 
 <div id="loginOverlay" class="modal-overlay auth-overlay">
-    <form id="loginForm" class="auth-login-card">
+    <form id="loginForm" class="auth-login-card" autocomplete="on">
         <div class="auth-login-banner">
             <h2>Вход</h2>
+            <p>Набивалка шаблонов</p>
         </div>
+
         <div class="auth-login-body">
-            <label class="auth-field">
-                <span>Логин</span>
-                <input id="loginUsername" autocomplete="username" placeholder="Введите логин" required>
-            </label>
-            <label class="auth-field">
-                <span>Пароль</span>
-                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Введите пароль" required>
-            </label>
+            <div class="auth-field">
+                <input
+                    id="loginUsername"
+                    type="text"
+                    autocomplete="username"
+                    aria-label="Логин"
+                    placeholder="Логин"
+                    required>
+            </div>
+
+            <div class="auth-field">
+                <input
+                    id="loginPassword"
+                    type="password"
+                    autocomplete="current-password"
+                    aria-label="Пароль"
+                    placeholder="Пароль"
+                    required>
+            </div>
+
             <label class="checkbox-field auth-checkbox">
                 <input id="loginRemember" type="checkbox" checked>
                 <span>Оставаться в системе</span>
             </label>
-            <div id="loginError" class="form-error auth-error" role="alert"></div>
+
+            <div id="loginError" class="form-error auth-error" role="alert" aria-live="polite"></div>
             <button id="loginButton" class="auth-submit" type="submit">Войти</button>
         </div>
     </form>

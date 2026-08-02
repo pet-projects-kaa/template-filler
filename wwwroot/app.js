@@ -207,7 +207,10 @@ async function login(event) {
 
         const data = await readResponseData(response);
         if (!response.ok) {
-            throw new Error(data?.error || `Ошибка ${response.status}`);
+            const fallbackMessage = response.status === 429
+                ? "Слишком много попыток входа. Подождите минуту и попробуйте снова."
+                : `Ошибка ${response.status}`;
+            throw new Error(data?.error || fallbackMessage);
         }
 
         elements.loginPassword.value = "";

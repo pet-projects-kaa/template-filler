@@ -26,7 +26,7 @@ builder.Services
         options.Cookie.Name = "template-filler-auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
-        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Cookie.Path = "/";
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
@@ -78,6 +78,7 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 await app.Services.GetRequiredService<AppDatabase>().InitializeAsync();
+await BootstrapUserRepair.EnsureAsync(app.Environment);
 
 app.UseForwardedHeaders();
 app.UseDefaultFiles();
@@ -137,20 +138,37 @@ auth.MapPost("/login", async (
     return Results.Ok(new AuthUserResponse(user.Username, user.MustChangePassword));
 }).RequireRateLimiting("login");
 
-auth.MapGet("/me", (ClaimsPrincipal principal) =>
+auth.MapGet("/me", async (
+    ClaimsPrincipal principal,
+    HttpContext httpContext,
+    AppDatabase database,
+    CancellationToken cancellationToken) =>
 {
-    var username = principal.Identity?.Name;
-    if (string.IsNullOrWhiteSpace(username))
+    var userIdValue = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!Guid.TryParse(userIdValue, out var userId))
     {
         return Results.Unauthorized();
     }
 
-    var mustChangePassword = string.Equals(
+    var user = await database.GetUserByIdAsync(userId, cancellationToken);
+    if (user is null)
+    {
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return Results.Unauthorized();
+    }
+
+    var claimRequiresChange = string.Equals(
         principal.FindFirstValue("must_change_password"),
         "true",
         StringComparison.OrdinalIgnoreCase);
 
-    return Results.Ok(new AuthUserResponse(username, mustChangePassword));
+    if (claimRequiresChange != user.MustChangePassword ||
+        !string.Equals(principal.Identity?.Name, user.Username, StringComparison.Ordinal))
+    {
+        await SignInAsync(httpContext, user, rememberMe: true);
+    }
+
+    return Results.Ok(new AuthUserResponse(user.Username, user.MustChangePassword));
 }).RequireAuthorization();
 
 auth.MapPost("/logout", async (HttpContext httpContext) =>
