@@ -7,6 +7,16 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<button id="menuButton" class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
+<div id="drawerBackdrop" class="drawer-backdrop"></div>
+<aside id="sideDrawer" class="side-drawer" aria-label="Разделы приложения">
+  <div class="drawer-head"><strong>Набивалка</strong><button id="menuCloseButton" class="drawer-close" type="button" aria-label="Закрыть">×</button></div>
+  <nav class="drawer-nav">
+    <a href="./" data-nav="templates"><span>▤</span><div><strong>Шаблоны</strong><small>Создание и заполнение документов</small></div></a>
+    <a href="handwriting.html" data-nav="handwriting"><span>✎</span><div><strong>Рукописный текст</strong><small>Текст на листе разными почерками</small></div></a>
+  </nav>
+</aside>
+
 <div id="appShell" class="app-shell hidden">
     <header class="app-header">
         <div>
@@ -14,7 +24,6 @@
             <p>Создавайте, заполняйте и выгружайте документы в Word.</p>
         </div>
         <div class="header-actions">
-            <a class="button subtle" href="handwriting.html">Рукописный текст</a>
             <span id="saveStatus" class="save-status">Готово</span>
             <button id="saveButton" class="button primary" type="button">Сохранить</button>
             <div class="user-menu">
@@ -189,6 +198,7 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<script src="navigation.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

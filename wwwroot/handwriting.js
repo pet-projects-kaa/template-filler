@@ -1,169 +1,40 @@
 "use strict";
-
-const el = {
-    gate: document.getElementById("authGate"),
-    app: document.getElementById("handwritingApp"),
-    text: document.getElementById("sourceText"),
-    style: document.getElementById("handwritingStyle"),
-    paper: document.getElementById("paperStyle"),
-    ink: document.getElementById("inkColor"),
-    size: document.getElementById("fontSize"),
-    randomness: document.getElementById("randomness"),
-    lineHeight: document.getElementById("lineHeight"),
-    render: document.getElementById("renderButton"),
-    randomize: document.getElementById("randomizeButton"),
-    download: document.getElementById("downloadButton"),
-    status: document.getElementById("renderStatus"),
-    canvas: document.getElementById("paperCanvas")
+const el={gate:document.getElementById("authGate"),app:document.getElementById("handwritingApp"),text:document.getElementById("sourceText"),style:document.getElementById("handwritingStyle"),stylePreview:document.getElementById("stylePreview"),paper:document.getElementById("paperStyle"),ink:document.getElementById("inkColor"),size:document.getElementById("fontSize"),randomness:document.getElementById("randomness"),lineHeight:document.getElementById("lineHeight"),render:document.getElementById("renderButton"),randomize:document.getElementById("randomizeButton"),download:document.getElementById("downloadButton"),status:document.getElementById("renderStatus"),canvas:document.getElementById("paperCanvas")};
+const ctx=el.canvas.getContext("2d");let seed=Math.floor(Math.random()*2147483646)+1;
+const bases={
+ school:{font:'"Marck Script"',size:1.02,slant:-.03,spacing:.18,lineWave:1.2,wordJitter:1.2,alpha:[.86,.98],compress:1,weight:400},
+ round:{font:'"Caveat"',size:1.14,slant:.02,spacing:.55,lineWave:2.2,wordJitter:2.1,alpha:[.78,.96],compress:1.03,weight:500},
+ adult:{font:'"Bad Script"',size:1.02,slant:-.08,spacing:-.1,lineWave:2.8,wordJitter:2.7,alpha:[.72,.94],compress:.96,weight:400},
+ doctor:{font:'"Neucha"',size:.9,slant:-.2,spacing:-1.5,lineWave:5.5,wordJitter:5.8,alpha:[.62,.9],compress:.72,angle:.08,weight:400},
+ nervous:{font:'"Neucha"',size:1,slant:.12,spacing:.7,lineWave:7,wordJitter:6.5,alpha:[.68,.96],compress:.9,angle:.12,weight:400},
+ tiny:{font:'"Pangolin"',size:.73,slant:-.02,spacing:-.25,lineWave:.9,wordJitter:.7,alpha:[.82,.98],compress:.92,weight:400},
+ rare:{font:'"Shantell Sans"',size:1,slant:.02,spacing:.1,lineWave:3,wordJitter:3,alpha:[.72,.96],compress:1,angle:.04,weight:400}
 };
-
-const ctx = el.canvas.getContext("2d");
-let seed = Math.floor(Math.random() * 2147483646) + 1;
-
+const variants={
+ school:[[1,0,0,1,1,0],[1.08,.02,.35,1.8,1.5,.02],[.82,-.02,-.2,.8,.7,-.01],[1.24,.01,.45,1.4,1.3,.01],[.96,-.04,-.05,.45,.5,-.02],[.88,-.01,-.55,.7,.7,0],[1.04,0,.28,.35,.35,0],[1,.07,.12,1.1,1,.03]],
+ adult:[[1,0,0,1,1,0],[.94,-.1,-.5,2.1,2.2,.05],[1.05,.04,.25,1.2,1.1,-.01],[1.17,-.04,.5,2.4,2,.02],[.9,-.1,-.8,1.4,1.5,.04],[.78,-.02,-.4,.7,.8,0],[.97,-.14,-.7,3.2,3,.07],[1.03,.01,.15,.8,.8,-.01]],
+ doctor:[[1,0,0,1,1,0],[.95,-.18,-.7,1.8,2,.08],[.76,-.08,-.9,1.3,1.5,.04],[.82,-.22,-1.2,2.4,2.5,.11],[.88,-.12,-.8,1.7,2,.07],[.96,.18,-.45,2.1,2.2,.09],[.9,-.05,-.65,3,3.5,.14],[.72,-.25,-1.5,3.8,4,.16]],
+ round:[[1,0,0,1,1,0],[1.12,.02,.75,1.2,1.2,.01],[1.02,-.02,.3,.7,.8,-.01],[1.08,-.06,.5,1.6,1.5,.02],[.98,-.03,.25,.5,.6,0],[1.22,.01,.9,1.8,1.8,.02],[.94,.02,.65,.8,.9,-.01],[1.18,.04,.45,2.2,2.1,.03]],
+ nervous:[[1,0,0,1,1,0],[1.02,.15,-.2,1.6,1.8,.09],[.95,.04,.2,2.6,2.8,.12],[.9,-.08,-.45,2.2,2.5,.1],[1.03,.2,.1,1.8,2,.14],[.96,-.22,-.1,1.5,1.7,.13],[1,.35,.05,2,2.3,.15],[1.1,.04,.8,2.5,2.8,.08]],
+ tiny:[[1,0,0,1,1,0],[.92,-.01,-.55,.6,.5,0],[.86,.02,-.4,.45,.45,0],[.82,-.03,-.7,.7,.6,.01],[.9,-.02,-.65,.8,.7,0],[.78,.01,-.2,.5,.5,-.01]],
+ rare:[[1.14,.08,.3,2.5,2.8,.04],[.9,-.02,-.25,4.5,4.8,.03],[1,-.35,.05,2.2,2.4,-.1],[1.08,-.06,.4,.5,.6,-.01],[.92,.02,-.3,2.8,3,.02],[1.22,-.12,.75,3.4,3.8,.1]]
+};
+const profiles={};
+for(const [group,list] of Object.entries(variants)){list.forEach((v,i)=>{const b=bases[group];profiles[`${group}${String(i+1).padStart(2,"0")}`]={...b,size:b.size*v[0],slant:b.slant+v[1],spacing:b.spacing+v[2],lineWave:b.lineWave*v[3],wordJitter:b.wordJitter*v[4],angle:(b.angle||.025)+v[5],compress:Math.max(.58,Math.min(1.18,b.compress+(i%3-1)*.035)),weight:i%4===1?500:b.weight};});}
+const previewTexts={school:"Сегодня аккуратно записываю домашнее задание",adult:"Нужно быстро записать, чтобы потом не забыть",doctor:"Rp.: принимать по одной таблетке после еды",round:"Доброе утро! Планы на сегодняшний день",nervous:"Срочно закончить всё до вечера",tiny:"Краткая заметка мелким аккуратным почерком",rare:"Так выглядит редкий характер рукописного текста"};
 initialize();
-
-async function initialize() {
-    try {
-        const response = await fetch("api/auth/me", { credentials: "same-origin" });
-        if (!response.ok) {
-            location.href = "./";
-            return;
-        }
-        el.gate.classList.add("hidden");
-        el.app.classList.remove("hidden");
-        wireEvents();
-        renderDocument();
-    } catch {
-        el.gate.textContent = "Не удалось подключиться к серверу.";
-    }
-}
-
-function wireEvents() {
-    el.render.addEventListener("click", () => { seed = Date.now() % 2147483647; renderDocument(); });
-    el.randomize.addEventListener("click", randomizeSettings);
-    el.download.addEventListener("click", downloadPng);
-    [el.paper, el.ink, el.size, el.randomness, el.lineHeight, el.style].forEach(input => input.addEventListener("input", renderDocument));
-    let timer;
-    el.text.addEventListener("input", () => {
-        clearTimeout(timer);
-        timer = setTimeout(renderDocument, 180);
-    });
-}
-
-function randomizeSettings() {
-    const styles = ["neat", "casual", "quick"];
-    const papers = ["lined", "grid", "plain"];
-    const inks = ["#2450a4", "#20232a", "#1f5d46"];
-    el.style.value = styles[Math.floor(Math.random() * styles.length)];
-    el.paper.value = papers[Math.floor(Math.random() * papers.length)];
-    el.ink.value = inks[Math.floor(Math.random() * inks.length)];
-    el.size.value = String(26 + Math.floor(Math.random() * 11));
-    el.randomness.value = String(25 + Math.floor(Math.random() * 55));
-    el.lineHeight.value = String(44 + Math.floor(Math.random() * 17));
-    seed = Date.now() % 2147483647;
-    renderDocument();
-}
-
-function renderDocument() {
-    el.status.textContent = "Генерация…";
-    drawPaper();
-    drawText();
-    el.status.textContent = "Готово";
-}
-
-function drawPaper() {
-    const w = el.canvas.width, h = el.canvas.height;
-    ctx.fillStyle = "#fffdf8";
-    ctx.fillRect(0, 0, w, h);
-    ctx.save();
-    ctx.lineWidth = 1;
-    if (el.paper.value === "lined") {
-        ctx.strokeStyle = "rgba(91,139,190,.23)";
-        for (let y = 120; y < h - 70; y += 56) line(70, y, w - 70, y);
-        ctx.strokeStyle = "rgba(215,92,92,.32)";
-        line(145, 60, 145, h - 60);
-    } else if (el.paper.value === "grid") {
-        ctx.strokeStyle = "rgba(91,139,190,.18)";
-        for (let y = 70; y < h - 50; y += 42) line(55, y, w - 55, y);
-        for (let x = 55; x < w - 50; x += 42) line(x, 55, x, h - 55);
-    }
-    ctx.restore();
-}
-
-function drawText() {
-    const text = el.text.value.replace(/\r/g, "");
-    const fontSize = Number(el.size.value);
-    const lineHeight = Number(el.lineHeight.value);
-    const randomness = Number(el.randomness.value) / 100;
-    const style = el.style.value;
-    const font = style === "neat" ? '"Segoe Print", "Comic Sans MS", cursive' : style === "quick" ? '"Bradley Hand", "Segoe Print", cursive' : '"Comic Sans MS", "Segoe Print", cursive';
-    const left = 175;
-    const right = el.canvas.width - 85;
-    const maxWidth = right - left;
-    let y = 135;
-    let random = seeded(seed);
-
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = el.ink.value;
-
-    for (const paragraph of text.split("\n")) {
-        const words = paragraph.split(/\s+/).filter(Boolean);
-        if (!words.length) { y += lineHeight; continue; }
-        let lineWords = [];
-        for (const word of words) {
-            const candidate = [...lineWords, word].join(" ");
-            ctx.font = `${fontSize}px ${font}`;
-            if (ctx.measureText(candidate).width > maxWidth && lineWords.length) {
-                drawNaturalLine(lineWords.join(" "), left, y, font, fontSize, randomness, random);
-                y += lineHeight;
-                lineWords = [word];
-            } else {
-                lineWords.push(word);
-            }
-            if (y > el.canvas.height - 90) break;
-        }
-        if (lineWords.length && y <= el.canvas.height - 90) {
-            drawNaturalLine(lineWords.join(" "), left, y, font, fontSize, randomness, random);
-            y += lineHeight;
-        }
-    }
-}
-
-function drawNaturalLine(text, x, y, font, size, randomness, random) {
-    let cursor = x + (random() - .5) * 5 * randomness;
-    for (const ch of text) {
-        const localSize = size * (1 + (random() - .5) * .06 * randomness);
-        const dy = (random() - .5) * 4.5 * randomness;
-        const angle = (random() - .5) * .045 * randomness;
-        ctx.save();
-        ctx.translate(cursor, y + dy);
-        ctx.rotate(angle);
-        ctx.globalAlpha = .78 + random() * .2;
-        ctx.font = `${localSize}px ${font}`;
-        ctx.fillText(ch, 0, 0);
-        ctx.restore();
-        const width = ctx.measureText(ch).width;
-        cursor += width + (random() - .5) * 1.8 * randomness;
-    }
-    ctx.globalAlpha = 1;
-}
-
-function line(x1, y1, x2, y2) {
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-}
-
-function seeded(initial) {
-    let value = initial || 1;
-    return () => {
-        value = value * 16807 % 2147483647;
-        return (value - 1) / 2147483646;
-    };
-}
-
-function downloadPng() {
-    renderDocument();
-    const link = document.createElement("a");
-    link.download = `rukopisny-text-${new Date().toISOString().slice(0,10)}.png`;
-    link.href = el.canvas.toDataURL("image/png");
-    link.click();
-}
+async function initialize(){try{const r=await fetch("api/auth/me",{credentials:"same-origin"});if(!r.ok){location.href="./";return}el.gate.classList.add("hidden");el.app.classList.remove("hidden");wireEvents();await document.fonts.ready;updateStylePreview();applyProfileDefaults();renderDocument()}catch{el.gate.textContent="Не удалось подключиться к серверу."}}
+function wireEvents(){el.render.addEventListener("click",()=>{seed=Date.now()%2147483647;renderDocument()});el.randomize.addEventListener("click",randomizeSettings);el.download.addEventListener("click",downloadPng);[el.paper,el.ink,el.size,el.randomness,el.lineHeight].forEach(x=>x.addEventListener("input",renderDocument));el.style.addEventListener("input",()=>{applyProfileDefaults();updateStylePreview();renderDocument()});let t;el.text.addEventListener("input",()=>{clearTimeout(t);t=setTimeout(renderDocument,150)})}
+function groupOf(id){return id.replace(/\d+$/,'')}
+function updateStylePreview(){const p=profiles[el.style.value],group=groupOf(el.style.value);el.stylePreview.textContent=previewTexts[group];el.stylePreview.style.fontFamily=`${p.font}, cursive`;el.stylePreview.style.fontSize=`${Math.max(20,Math.round(28*p.size))}px`;el.stylePreview.style.letterSpacing=`${p.spacing}px`;el.stylePreview.style.transform=`skewX(${Math.round(p.slant*30)}deg) scaleX(${p.compress})`;el.stylePreview.style.transformOrigin="left center"}
+function applyProfileDefaults(){const p=profiles[el.style.value],group=groupOf(el.style.value);const groupRnd={school:28,adult:48,doctor:86,round:36,nervous:90,tiny:24,rare:62}[group];el.size.value=String(Math.max(22,Math.min(46,Math.round(31*p.size))));el.randomness.value=String(groupRnd);el.lineHeight.value=String(Math.max(36,Math.min(70,Math.round(50*p.size))))}
+function randomizeSettings(){const styles=Object.keys(profiles),papers=["lined","grid","plain","warm"],inks=["#2450a4","#20232a","#1f5d46"];el.style.value=styles[Math.floor(Math.random()*styles.length)];el.paper.value=papers[Math.floor(Math.random()*papers.length)];el.ink.value=inks[Math.floor(Math.random()*inks.length)];applyProfileDefaults();el.randomness.value=String(Math.min(100,Number(el.randomness.value)-10+Math.floor(Math.random()*21)));seed=Date.now()%2147483647;updateStylePreview();renderDocument()}
+function renderDocument(){el.status.textContent="Генерация…";drawPaper();drawText();el.status.textContent=`Готово · стиль ${el.style.selectedOptions[0]?.textContent.trim()||""}`}
+function drawPaper(){const w=el.canvas.width,h=el.canvas.height;ctx.fillStyle=el.paper.value==="warm"?"#f7f0dc":"#fffdf8";ctx.fillRect(0,0,w,h);ctx.save();ctx.lineWidth=1;if(el.paper.value==="lined"){ctx.strokeStyle="rgba(91,139,190,.23)";for(let y=120;y<h-70;y+=56)line(70,y,w-70,y);ctx.strokeStyle="rgba(215,92,92,.32)";line(145,60,145,h-60)}else if(el.paper.value==="grid"){ctx.strokeStyle="rgba(91,139,190,.18)";for(let y=70;y<h-50;y+=42)line(55,y,w-55,y);for(let x=55;x<w-50;x+=42)line(x,55,x,h-55)}ctx.restore()}
+function drawText(){const p=profiles[el.style.value],rnd=seeded(seed),raw=el.text.value.replace(/\r/g,""),base=Number(el.size.value)*p.size,lh=Number(el.lineHeight.value),r=Number(el.randomness.value)/100,left=175,right=el.canvas.width-85,max=right-left;let y=140;ctx.textBaseline="alphabetic";for(const para of raw.split("\n")){const words=para.split(/\s+/).filter(Boolean);if(!words.length){y+=lh;continue}let lineWords=[];for(const word of words){const cand=[...lineWords,word].join(" ");setFont(p,base);if(measure(cand,p)>max&&lineWords.length){drawLine(lineWords,left,y,p,base,r,rnd);y+=lh;lineWords=[word]}else lineWords.push(word);if(y>el.canvas.height-90)break}if(lineWords.length&&y<=el.canvas.height-90){drawLine(lineWords,left,y,p,base,r,rnd);y+=lh}}}
+function setFont(p,size){ctx.font=`${p.weight||400} ${size}px ${p.font}, cursive`}
+function measure(text,p){setFont(p,Number(el.size.value)*p.size);return ctx.measureText(text).width*p.compress+Math.max(0,text.length-1)*p.spacing}
+function drawLine(words,x,y,p,size,r,rnd){let cursor=x+(rnd()-.5)*8*r;const lineTilt=(rnd()-.5)*(p.angle||.025)*r;const wave=(rnd()-.5)*p.lineWave*r;for(let i=0;i<words.length;i++){const word=words[i];const local=size*(1+(rnd()-.5)*.09*r);setFont(p,local);const rawWidth=ctx.measureText(word).width;const width=rawWidth*p.compress;const dy=Math.sin(i*.9+rnd())*wave+(rnd()-.5)*p.wordJitter*r;const angle=lineTilt+(rnd()-.5)*(p.angle||.035)*r;ctx.save();ctx.translate(cursor,y+dy);ctx.rotate(angle);ctx.transform(p.compress,0,p.slant*r,1,0,0);ctx.globalAlpha=p.alpha[0]+rnd()*(p.alpha[1]-p.alpha[0]);ctx.fillStyle=el.ink.value;ctx.fillText(word,0,0);if(rnd()<.24*r){ctx.globalAlpha*=.16;ctx.fillText(word,.5+(rnd()-.5),.4+(rnd()-.5))}ctx.restore();cursor+=width+ctx.measureText(" ").width*p.compress+(rnd()-.5)*4*r+p.spacing;if(cursor>el.canvas.width-80)break}ctx.globalAlpha=1}
+function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function seeded(initial){let value=initial||1;return()=>{value=value*16807%2147483647;return(value-1)/2147483646}}
+function downloadPng(){renderDocument();const a=document.createElement("a");a.download=`rukopisny-text-${new Date().toISOString().slice(0,10)}.png`;a.href=el.canvas.toDataURL("image/png");a.click()}
