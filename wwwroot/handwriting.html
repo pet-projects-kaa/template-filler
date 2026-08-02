@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Рукописный текст — Набивалка шаблонов</title>
+    <link rel="stylesheet" href="handwriting.css">
+</head>
+<body>
+<div id="authGate" class="auth-gate">Проверяем авторизацию…</div>
+<div id="handwritingApp" class="module-shell hidden">
+    <header class="module-header">
+        <div>
+            <a class="back-link" href="./">← К шаблонам</a>
+            <h1>Рукописный текст</h1>
+            <p>Введите текст, настройте вид листа и выгрузите результат в PNG.</p>
+        </div>
+        <div class="header-actions">
+            <button id="randomizeButton" class="button secondary" type="button">Случайный стиль</button>
+            <button id="downloadButton" class="button primary" type="button">Скачать PNG</button>
+        </div>
+    </header>
+
+    <main class="module-grid">
+        <section class="settings-panel">
+            <label class="field">
+                <span>Текст</span>
+                <textarea id="sourceText" rows="12" maxlength="12000" placeholder="Введите текст…">Пример рукописного текста.
+Каждая строка будет немного отличаться по наклону и положению букв.</textarea>
+            </label>
+
+            <div class="two-columns">
+                <label class="field">
+                    <span>Стиль почерка</span>
+                    <select id="handwritingStyle">
+                        <option value="neat">Аккуратный</option>
+                        <option value="casual" selected>Обычный</option>
+                        <option value="quick">Быстрый</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Фон</span>
+                    <select id="paperStyle">
+                        <option value="lined">Линейка</option>
+                        <option value="grid">Клетка</option>
+                        <option value="plain">Чистый лист</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="two-columns">
+                <label class="field">
+                    <span>Ручка</span>
+                    <select id="inkColor">
+                        <option value="#2450a4">Синяя</option>
+                        <option value="#20232a">Чёрная</option>
+                        <option value="#1f5d46">Зелёная</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Размер текста</span>
+                    <input id="fontSize" type="range" min="22" max="46" value="31">
+                </label>
+            </div>
+
+            <label class="field">
+                <span>Естественная неровность</span>
+                <input id="randomness" type="range" min="0" max="100" value="42">
+            </label>
+            <label class="field">
+                <span>Межстрочный интервал</span>
+                <input id="lineHeight" type="range" min="36" max="70" value="50">
+            </label>
+
+            <button id="renderButton" class="button primary wide" type="button">Сгенерировать</button>
+            <p class="module-note">Модуль предназначен для заметок, конспектов и декоративных материалов.</p>
+        </section>
+
+        <section class="preview-panel">
+            <div class="preview-toolbar">
+                <strong>Предпросмотр</strong>
+                <span id="renderStatus">Готово</span>
+            </div>
+            <div class="canvas-wrap">
+                <canvas id="paperCanvas" width="1240" height="1754"></canvas>
+            </div>
+        </section>
+    </main>
+</div>
+<script src="handwriting.js" defer></script>
+</body>
+</html>

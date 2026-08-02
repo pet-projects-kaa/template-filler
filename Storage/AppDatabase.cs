@@ -315,7 +315,6 @@ public sealed class AppDatabase
         await insertCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
-
     private static async Task RestoreInitialUserAccessAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
