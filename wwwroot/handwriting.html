@@ -10,11 +10,14 @@
 <button id="menuButton" class="menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
 <div id="drawerBackdrop" class="drawer-backdrop"></div>
 <aside id="sideDrawer" class="side-drawer" aria-label="Разделы приложения">
-  <div class="drawer-head"><strong>Набивалка</strong><button id="menuCloseButton" class="drawer-close" type="button" aria-label="Закрыть">×</button></div>
-  <nav class="drawer-nav">
-    <a href="./" data-nav="templates"><span>▤</span><div><strong>Шаблоны</strong><small>Создание и заполнение документов</small></div></a>
-    <a href="handwriting.html" data-nav="handwriting"><span>✎</span><div><strong>Рукописный текст</strong><small>Текст на листе разными почерками</small></div></a>
-  </nav>
+    <div class="drawer-head">
+        <strong>Набивалка</strong>
+        <button id="menuCloseButton" class="drawer-close" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <nav class="drawer-nav">
+        <a href="./" data-nav="templates"><span>▤</span><div><strong>Шаблоны</strong><small>Создание и заполнение документов</small></div></a>
+        <a href="handwriting.html" data-nav="handwriting"><span>✎</span><div><strong>Рукописный текст</strong><small>Текст на листе разными почерками</small></div></a>
+    </nav>
 </aside>
 
 <div id="authGate" class="auth-gate">Проверяем авторизацию…</div>
@@ -22,11 +25,11 @@
     <header class="module-header">
         <div>
             <h1>Рукописный текст</h1>
-            <p>Выберите характер почерка, фон листа и выгрузите результат в PNG.</p>
+            <p>300 пресетов, натуральная ручка, тетрадные и фото-фоны.</p>
         </div>
         <div class="header-actions">
             <button id="randomizeButton" class="button secondary" type="button">Случайный почерк</button>
-            <button id="downloadButton" class="button primary" type="button">Скачать PNG</button>
+            <button id="downloadButton" class="button primary" type="button">Скачать выбранный PNG</button>
         </div>
     </header>
 
@@ -34,54 +37,129 @@
         <section class="settings-panel">
             <label class="field">
                 <span>Текст</span>
-                <textarea id="sourceText" rows="12" maxlength="12000" placeholder="Введите текст…">Сегодня я записываю несколько важных мыслей.
+                <textarea id="sourceText" rows="10" maxlength="12000" placeholder="Введите текст…">Сегодня я записываю несколько важных мыслей.
 Нужно не забыть закончить работу и позвонить вечером.</textarea>
             </label>
 
-            <label class="field">
-                <span>Характер почерка</span>
-                <select id="handwritingStyle"><optgroup label="Школьные и аккуратные">
-<option value="school01">01. Школьный ровный</option><option value="school02">02. Школьный округлый</option><option value="school03">03. Школьный мелкий</option><option value="school04">04. Школьный крупный</option><option value="school05">05. Отличница — очень аккуратный</option><option value="school06">06. Конспект — плотный</option><option value="school07">07. Прописи — медленный</option><option value="school08">08. Дневник — лёгкий наклон</option>
-</optgroup>
-<optgroup label="Взрослые повседневные">
-<option value="adult01" selected>09. Взрослый обычный</option><option value="adult02">10. Взрослый быстрый</option><option value="adult03">11. Взрослый мягкий</option><option value="adult04">12. Взрослый размашистый</option><option value="adult05">13. Взрослый сжатый</option><option value="adult06">14. Взрослый мелкий</option><option value="adult07">15. Записка на ходу</option><option value="adult08">16. Спокойный дневниковый</option>
-</optgroup>
-<optgroup label="Медицинские и трудночитаемые">
-<option value="doctor01">17. Врачебный сжатый</option><option value="doctor02">18. Врачебный резкий</option><option value="doctor03">19. Врачебный мелкий</option><option value="doctor04">20. Рецепт — почти стенография</option><option value="doctor05">21. Дежурная запись</option><option value="doctor06">22. Угловатая скоропись</option><option value="doctor07">23. Нервная кардиограмма</option><option value="doctor08">24. Очень неразборчивый</option>
-</optgroup>
-<optgroup label="Крупные и декоративные">
-<option value="round01">25. Крупный округлый</option><option value="round02">26. Пузырчатые буквы</option><option value="round03">27. Мягкий женский</option><option value="round04">28. Декоративный курсив</option><option value="round05">29. Открыточный</option><option value="round06">30. Широкий размашистый</option><option value="round07">31. Лёгкий воздушный</option><option value="round08">32. Крупный детский</option>
-</optgroup>
-<optgroup label="Угловатые и нервные">
-<option value="nervous01">33. Нервный угловатый</option><option value="nervous02">34. Резкий мужской</option><option value="nervous03">35. Скачущая строка</option><option value="nervous04">36. Торопливый студенческий</option><option value="nervous05">37. Ломаный курсив</option><option value="nervous06">38. Сильный правый наклон</option><option value="nervous07">39. Обратный наклон</option><option value="nervous08">40. Неровный маркерный</option>
-</optgroup>
-<optgroup label="Мелкие и педантичные">
-<option value="tiny01">41. Мелкий педантичный</option><option value="tiny02">42. Бухгалтерский</option><option value="tiny03">43. Лабораторный журнал</option><option value="tiny04">44. Архивная пометка</option><option value="tiny05">45. Плотный конспект</option><option value="tiny06">46. Миниатюрный школьный</option>
-</optgroup>
-<optgroup label="Редкие характеры">
-<option value="rare01">47. Детский неровный</option><option value="rare02">48. Пожилой дрожащий</option><option value="rare03">49. Леворукий обратный наклон</option><option value="rare04">50. Каллиграфический</option><option value="rare05">51. Черновик карандашного типа</option><option value="rare06">52. Экспрессивный размашистый</option>
-</optgroup></select>
-            </label>
+            <div class="two-columns">
+                <label class="field">
+                    <span>Категория</span>
+                    <select id="styleCategory"></select>
+                </label>
+                <label class="field">
+                    <span>Почерк</span>
+                    <select id="handwritingStyle"></select>
+                </label>
+            </div>
 
-            <div class="style-preview" id="stylePreview">Пример выбранного почерка</div>
+            <div class="style-preview">
+                <div>
+                    <small id="styleCounter">300 пресетов</small>
+                    <div id="stylePreview">Пример выбранного почерка</div>
+                </div>
+            </div>
 
             <div class="two-columns">
-                <label class="field"><span>Фон</span><select id="paperStyle"><option value="lined">Линейка</option><option value="grid">Клетка</option><option value="plain">Чистый лист</option><option value="warm">Тёплая бумага</option></select></label>
-                <label class="field"><span>Ручка</span><select id="inkColor"><option value="#2450a4">Синяя шариковая</option><option value="#20232a">Чёрная</option><option value="#1f5d46">Зелёная</option></select></label>
+                <label class="field">
+                    <span>Бумага</span>
+                    <select id="paperStyle">
+                        <option value="plain">Белый лист</option>
+                        <option value="office">Офисная бумага</option>
+                        <option value="warm">Кремовая бумага</option>
+                        <option value="lined" selected>Тетрадь в линейку</option>
+                        <option value="wide-lined">Широкая линейка</option>
+                        <option value="grid">Тетрадь в клетку</option>
+                        <option value="yellow">Желтоватая тетрадь</option>
+                        <option value="aged">Состаренная бумага</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Режим кадра</span>
+                    <select id="sceneStyle">
+                        <option value="scan" selected>Чистый скан</option>
+                        <option value="wood">Фото на деревянном столе</option>
+                        <option value="dark-desk">Фото на тёмном столе</option>
+                        <option value="fabric">Фото на ткани</option>
+                    </select>
+                </label>
             </div>
-            <div class="two-columns">
-                <label class="field"><span>Размер текста</span><input id="fontSize" type="range" min="20" max="48" value="31"></label>
-                <label class="field"><span>Неровность</span><input id="randomness" type="range" min="0" max="100" value="45"></label>
-            </div>
-            <label class="field"><span>Межстрочный интервал</span><input id="lineHeight" type="range" min="34" max="72" value="50"></label>
 
-            <button id="renderButton" class="button primary wide" type="button">Перегенерировать вариант</button>
-            <p class="module-note">Каждая генерация немного меняет наклон, ширину, положение строк и насыщенность ручки. Почерки являются декоративными и не копируют конкретного человека.</p>
+            <div class="two-columns">
+                <label class="field">
+                    <span>Пишущий инструмент</span>
+                    <select id="inkStyle">
+                        <option value="blue-ballpoint" selected>Синяя шариковая</option>
+                        <option value="dark-blue-ballpoint">Тёмно-синяя шариковая</option>
+                        <option value="black-ballpoint">Чёрная шариковая</option>
+                        <option value="blue-gel">Синяя гелевая</option>
+                        <option value="faint-blue">Слабопишущая синяя</option>
+                        <option value="pencil">Простой карандаш</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Естественность</span>
+                    <select id="naturalness">
+                        <option value="neat">Аккуратно</option>
+                        <option value="natural" selected>Естественно</option>
+                        <option value="careless">Небрежно</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="two-columns">
+                <label class="field range-field">
+                    <span>Размер <output id="fontSizeValue">31</output></span>
+                    <input id="fontSize" type="range" min="18" max="52" value="31">
+                </label>
+                <label class="field range-field">
+                    <span>Межстрочный интервал <output id="lineHeightValue">52</output></span>
+                    <input id="lineHeight" type="range" min="34" max="82" value="52">
+                </label>
+            </div>
+
+            <div class="two-columns">
+                <label class="field range-field">
+                    <span>Интервал букв <output id="letterSpacingValue">0</output></span>
+                    <input id="letterSpacing" type="range" min="-3" max="5" step="0.25" value="0">
+                </label>
+                <label class="field range-field">
+                    <span>Насыщенность <output id="strokeStrengthValue">70</output>%</span>
+                    <input id="strokeStrength" type="range" min="25" max="100" value="70">
+                </label>
+            </div>
+
+            <div class="variant-controls">
+                <label class="field compact-field">
+                    <span>Количество вариантов</span>
+                    <select id="variantCount">
+                        <option value="1">1</option>
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                    </select>
+                </label>
+                <button id="generateVariantsButton" class="button primary grow" type="button">Сгенерировать варианты</button>
+            </div>
+
+            <button id="renderButton" class="button secondary wide" type="button">Перегенерировать выбранный вариант</button>
+            <p class="module-note">300 пресетов собираются из контролируемых почерковых профилей и случайных параметров. Одинаковые буквы немного отличаются, а ручка местами пишет слабее. Пресеты не копируют почерк конкретного человека.</p>
         </section>
 
         <section class="preview-panel">
-            <div class="preview-toolbar"><strong>Предпросмотр листа</strong><span id="renderStatus">Готово</span></div>
-            <div class="canvas-wrap"><canvas id="paperCanvas" width="1240" height="1754"></canvas></div>
+            <div class="preview-toolbar">
+                <strong>Предпросмотр</strong>
+                <span id="renderStatus">Подготовка…</span>
+            </div>
+            <div class="canvas-wrap">
+                <canvas id="paperCanvas" width="1400" height="1900"></canvas>
+            </div>
+            <div class="variants-head">
+                <div>
+                    <strong>Варианты</strong>
+                    <small>Нажмите на карточку, чтобы открыть её в полном размере.</small>
+                </div>
+                <span id="variantStatus">1 вариант</span>
+            </div>
+            <div id="variantGallery" class="variant-gallery"></div>
         </section>
     </main>
 </div>
