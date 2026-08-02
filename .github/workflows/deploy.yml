@@ -52,14 +52,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # The archive must live outside GITHUB_WORKSPACE. Otherwise tar can
+          # discover and read the archive while it is still being written.
+          RELEASE_ARCHIVE="$RUNNER_TEMP/$ARCHIVE_NAME"
+
           tar \
             --exclude='.git' \
             --exclude='./data' \
             --exclude='./App_Data/templates.json' \
             --exclude='./bin' \
             --exclude='./obj' \
-            --exclude='*.tar.gz' \
-            -czf "$ARCHIVE_NAME" .
+            -czf "$RELEASE_ARCHIVE" \
+            -C "$GITHUB_WORKSPACE" .
+
+          test -s "$RELEASE_ARCHIVE"
+          echo "RELEASE_ARCHIVE=$RELEASE_ARCHIVE" >> "$GITHUB_ENV"
 
       - name: Configure SSH
         shell: bash
@@ -80,7 +88,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           set -euo pipefail
-          scp "$ARCHIVE_NAME" "$VPS_USER@$VPS_HOST:/tmp/$ARCHIVE_NAME"
+          test -n "${RELEASE_ARCHIVE:-}" || { echo "RELEASE_ARCHIVE is empty"; exit 1; }
+          scp "$RELEASE_ARCHIVE" "$VPS_USER@$VPS_HOST:/tmp/$ARCHIVE_NAME"
 
       - name: Activate release
         shell: bash
