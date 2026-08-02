@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Набивалка шаблонов</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+    <header class="app-header">
+        <div>
+            <h1>Набивалка шаблонов</h1>
+            <p>Создавайте документы, превращайте прочерки в поля и заполняйте их.</p>
+        </div>
+        <div class="header-actions">
+            <span id="saveStatus" class="save-status">Готово</span>
+            <button id="saveButton" class="button primary" type="button">Сохранить</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <aside class="sidebar">
+            <button id="newTemplateButton" class="button primary wide" type="button">+ Новый шаблон</button>
+            <label class="search-box">
+                <span class="sr-only">Поиск шаблонов</span>
+                <input id="templateSearch" type="search" placeholder="Поиск шаблонов">
+            </label>
+            <div id="templateList" class="template-list" aria-live="polite"></div>
+        </aside>
+
+        <main class="main-panel">
+            <div class="document-header">
+                <label class="template-name-field">
+                    <span>Название шаблона</span>
+                    <input id="templateName" maxlength="120" placeholder="Например: Заявление на отпуск">
+                </label>
+                <div class="document-actions">
+                    <button id="duplicateButton" class="button" type="button">Копировать</button>
+                    <button id="deleteButton" class="button danger-text" type="button">Удалить</button>
+                </div>
+            </div>
+
+            <div class="mode-tabs" role="tablist" aria-label="Режим работы">
+                <button id="editorTab" class="mode-tab active" type="button" role="tab" aria-selected="true">Редактор</button>
+                <button id="fillTab" class="mode-tab" type="button" role="tab" aria-selected="false">Заполнение</button>
+            </div>
+
+            <section id="editorView" class="view-panel">
+                <div class="toolbar" aria-label="Форматирование документа">
+                    <div class="toolbar-group">
+                        <button class="tool-button" type="button" data-command="undo" title="Отменить">↶</button>
+                        <button class="tool-button" type="button" data-command="redo" title="Повторить">↷</button>
+                    </div>
+                    <div class="toolbar-group">
+                        <select id="blockFormat" class="tool-select" title="Стиль абзаца">
+                            <option value="p">Обычный текст</option>
+                            <option value="h1">Заголовок 1</option>
+                            <option value="h2">Заголовок 2</option>
+                            <option value="h3">Заголовок 3</option>
+                        </select>
+                        <select id="fontSize" class="tool-select compact" title="Размер текста">
+                            <option value="3" selected>12</option>
+                            <option value="4">14</option>
+                            <option value="5">18</option>
+                            <option value="6">24</option>
+                            <option value="7">36</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-group">
+                        <button class="tool-button strong" type="button" data-command="bold" title="Полужирный">Ж</button>
+                        <button class="tool-button italic" type="button" data-command="italic" title="Курсив">К</button>
+                        <button class="tool-button underline" type="button" data-command="underline" title="Подчёркнутый">Ч</button>
+                        <button class="tool-button strike" type="button" data-command="strikeThrough" title="Зачёркнутый">abc</button>
+                        <label class="color-tool" title="Цвет текста">
+                            <span>A</span>
+                            <input id="textColor" type="color" value="#20242b">
+                        </label>
+                    </div>
+                    <div class="toolbar-group">
+                        <button class="tool-button" type="button" data-command="justifyLeft" title="По левому краю">≡</button>
+                        <button class="tool-button center-icon" type="button" data-command="justifyCenter" title="По центру">≡</button>
+                        <button class="tool-button right-icon" type="button" data-command="justifyRight" title="По правому краю">≡</button>
+                        <button class="tool-button justify-icon" type="button" data-command="justifyFull" title="По ширине">≡</button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button class="tool-button" type="button" data-command="insertUnorderedList" title="Маркированный список">•☰</button>
+                        <button class="tool-button" type="button" data-command="insertOrderedList" title="Нумерованный список">1☰</button>
+                        <button class="tool-button" type="button" data-command="outdent" title="Уменьшить отступ">⇤</button>
+                        <button class="tool-button" type="button" data-command="indent" title="Увеличить отступ">⇥</button>
+                    </div>
+                    <div class="toolbar-group toolbar-main-action">
+                        <button id="insertFieldButton" class="button accent" type="button">+ Вставить поле</button>
+                        <button id="convertFieldsButton" class="button" type="button">____ → поля</button>
+                        <button class="tool-button" type="button" data-command="removeFormat" title="Очистить форматирование">Tx</button>
+                    </div>
+                </div>
+
+                <div class="page-stage">
+                    <article id="editor" class="document-page editable" contenteditable="true" spellcheck="true" aria-label="Редактор шаблона"></article>
+                </div>
+                <p class="editor-hint">
+                    Поставьте курсор и нажмите «Вставить поле» либо преобразуйте готовые прочерки <code>____</code>.
+                    Прочерки в строке ручной даты вида «____ . ____ . 2026 год» сохраняются.
+                </p>
+            </section>
+
+            <section id="fillView" class="view-panel hidden">
+                <div class="fill-actions">
+                    <div>
+                        <strong>Заполните поля прямо в документе</strong>
+                        <span id="fieldCount" class="field-count"></span>
+                    </div>
+                    <div class="fill-buttons">
+                        <button id="resetFillButton" class="button" type="button">Очистить поля</button>
+                        <button id="printButton" class="button primary" type="button">Печать / PDF</button>
+                    </div>
+                </div>
+                <div class="page-stage fill-stage">
+                    <article id="fillDocument" class="document-page fill-document" aria-label="Заполнение шаблона"></article>
+                </div>
+            </section>
+        </main>
+    </div>
+</div>
+
+<div id="emptyState" class="empty-state hidden">
+    <strong>Шаблонов пока нет</strong>
+    <span>Создайте первый шаблон и вставьте в него текст.</span>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+.git
+.github
+bin
+obj
+data
+App_Data/templates.json
+*.tar.gz
+*.zip
+README.md
+deploy
+run.cmd
+run.sh
+docker-compose.yml
