@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Рукописный текст и подписи</title>
+  <link rel="stylesheet" href="handwriting.css">
+</head>
+<body>
+<div id="authGate" class="auth-gate">Проверяем авторизацию…</div>
+<div id="page" class="page hidden">
+  <header class="topbar">
+    <div>
+      <a class="back" href="./">← Шаблоны</a>
+      <h1>Рукописный текст</h1>
+      <p>Конспекты на тетрадных листах и библиотека синтетических подписей.</p>
+    </div>
+    <div class="top-actions">
+      <span id="currentUser" class="user"></span>
+      <button id="logoutButton" class="button ghost" type="button">Выйти</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="tabs" role="tablist">
+      <button id="textTab" class="tab active" type="button" role="tab" aria-selected="true">Рукописный текст</button>
+      <button id="signaturesTab" class="tab" type="button" role="tab" aria-selected="false">Подписи <span class="count">1000</span></button>
+    </div>
+
+    <section id="textPanel" class="panel">
+      <aside class="controls">
+        <label>Текст
+          <textarea id="sourceText" rows="14" placeholder="Вставьте текст конспекта…">Тема: Рукописный конспект
+
+Введите сюда текст. Он появится на тетрадном листе справа. Подпись из соседней вкладки можно добавить в нижнюю часть страницы.</textarea>
+        </label>
+        <div class="control-grid">
+          <label>Размер
+            <input id="fontSize" type="range" min="18" max="42" value="27">
+          </label>
+          <label>Наклон
+            <input id="slant" type="range" min="-8" max="14" value="3">
+          </label>
+          <label>Межстрочный интервал
+            <input id="lineHeight" type="range" min="28" max="54" value="38">
+          </label>
+          <label>Неровность
+            <input id="jitter" type="range" min="0" max="4" value="1.4" step="0.2">
+          </label>
+        </div>
+        <label class="check"><input id="showSignature" type="checkbox" checked> Показывать выбранную подпись</label>
+        <div class="button-row">
+          <button id="printNotes" class="button primary" type="button">Печать / PDF</button>
+          <button id="clearSignature" class="button" type="button">Убрать подпись</button>
+        </div>
+        <p id="selectedSignatureLabel" class="selected-label">Подпись не выбрана</p>
+      </aside>
+      <div class="paper-wrap">
+        <article id="paper" class="paper" aria-label="Предпросмотр рукописного текста">
+          <div class="paper-margin"></div>
+          <div id="handwrittenText" class="handwritten-text"></div>
+          <img id="paperSignature" class="paper-signature hidden" alt="Выбранная подпись">
+        </article>
+      </div>
+    </section>
+
+    <section id="signaturesPanel" class="panel hidden">
+      <div class="signature-toolbar">
+        <label class="search"><span>Поиск</span><input id="signatureSearch" type="search" placeholder="Например: 0427"></label>
+        <button id="shuffleButton" class="button" type="button">Перемешать</button>
+        <button id="showAllButton" class="button" type="button">Показать все</button>
+        <span id="resultCount" class="result-count"></span>
+      </div>
+      <p class="notice">Все изображения синтетические и созданы специально для библиотеки. Они не копируют подписи конкретных людей.</p>
+      <div id="signatureGrid" class="signature-grid" aria-live="polite"></div>
+      <button id="loadMoreButton" class="button load-more" type="button">Показать ещё</button>
+    </section>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+<script src="handwriting.js" defer></script>
+</body>
+</html>
