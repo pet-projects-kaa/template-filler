@@ -5,24 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Набивалка шаблонов</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="login.css">
-    <link rel="stylesheet" href="navigation.css">
 </head>
 <body>
 <div id="appShell" class="app-shell hidden">
-    <button id="menuButton" class="app-menu-button" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
-    <div id="drawerBackdrop" class="app-drawer-backdrop"></div>
-    <aside id="sideDrawer" class="app-side-drawer" aria-label="Разделы приложения">
-        <div class="app-drawer-head">
-            <strong>Набивалка</strong>
-            <button id="menuCloseButton" class="app-drawer-close" type="button" aria-label="Закрыть">×</button>
-        </div>
-        <nav class="app-drawer-nav">
-            <a class="active" href="./"><span>▤</span><div><strong>Шаблоны</strong><small>Документы и заполнение полей</small></div></a>
-            <a href="handwriting.html"><span>✎</span><div><strong>Рукописные конспекты</strong><small>Многостраничный текст на тетрадных листах</small></div></a>
-        </nav>
-    </aside>
-
     <header class="app-header">
         <div>
             <h1>Набивалка шаблонов</h1>
@@ -155,37 +140,17 @@
     <form id="loginForm" class="auth-login-card" autocomplete="on">
         <div class="auth-login-banner">
             <h2>Вход</h2>
-            <p>Набивалка шаблонов</p>
         </div>
-
         <div class="auth-login-body">
-            <div class="auth-field">
-                <input
-                    id="loginUsername"
-                    type="text"
-                    autocomplete="username"
-                    aria-label="Логин"
-                    placeholder="Логин"
-                    required>
-            </div>
-
-            <div class="auth-field">
-                <input
-                    id="loginPassword"
-                    type="password"
-                    autocomplete="current-password"
-                    aria-label="Пароль"
-                    placeholder="Пароль"
-                    required>
-            </div>
-
-            <label class="checkbox-field auth-checkbox">
+            <input id="loginUsername" type="text" autocomplete="username" placeholder="Логин" aria-label="Логин" required>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Пароль" aria-label="Пароль" required>
+            <label class="auth-remember">
                 <input id="loginRemember" type="checkbox" checked>
-                <span>Оставаться в системе</span>
+                <span>Запомнить меня</span>
             </label>
-
             <div id="loginError" class="form-error auth-error" role="alert" aria-live="polite"></div>
             <button id="loginButton" class="auth-submit" type="submit">Войти</button>
+            <p class="auth-hint">Начальный логин: <strong>01</strong></p>
         </div>
     </form>
 </div>
@@ -218,7 +183,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="navigation.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

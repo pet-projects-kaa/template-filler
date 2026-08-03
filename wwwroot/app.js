@@ -207,10 +207,7 @@ async function login(event) {
 
         const data = await readResponseData(response);
         if (!response.ok) {
-            const fallbackMessage = response.status === 429
-                ? "Слишком много попыток входа. Подождите минуту и попробуйте снова."
-                : `Ошибка ${response.status}`;
-            throw new Error(data?.error || fallbackMessage);
+            throw new Error(data?.error || `Ошибка ${response.status}`);
         }
 
         elements.loginPassword.value = "";
@@ -254,16 +251,7 @@ function showLogin(message = "") {
     elements.passwordOverlay.classList.add("hidden");
     elements.loginOverlay.classList.remove("hidden");
     elements.loginError.textContent = message;
-    if (!elements.loginUsername.value) {
-        elements.loginUsername.value = "01";
-    }
-    setTimeout(() => {
-        if (elements.loginUsername.value) {
-            elements.loginPassword.focus();
-        } else {
-            elements.loginUsername.focus();
-        }
-    }, 0);
+    setTimeout(() => elements.loginUsername.focus(), 0);
 }
 
 async function logout() {

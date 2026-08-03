@@ -52,17 +52,3 @@ public sealed record WordRun(
     int? FontSize,
     string? Color,
     bool Break = false);
-
-public sealed record UploadedFontListItem(
-    Guid Id,
-    string Name,
-    string OriginalFileName,
-    string FileExtension,
-    long SizeBytes,
-    DateTimeOffset CreatedAt);
-
-public sealed record UploadedFontFile(
-    byte[] Data,
-    string ContentType,
-    string OriginalFileName,
-    string FileExtension);

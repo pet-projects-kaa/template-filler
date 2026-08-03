@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Http.Features;
 using TemplateFiller.Export;
 using TemplateFiller.Models;
 using TemplateFiller.Security;
@@ -28,8 +27,8 @@ builder.Services
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Cookie.Path = "/";
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
         options.SlidingExpiration = true;
         options.Events.OnRedirectToLogin = context =>
@@ -61,11 +60,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
-});
-
-builder.Services.Configure<FormOptions>(options =>
-{
-    options.MultipartBodyLengthLimit = 9 * 1024 * 1024;
 });
 
 builder.Services.AddAuthorization();
@@ -144,37 +138,20 @@ auth.MapPost("/login", async (
     return Results.Ok(new AuthUserResponse(user.Username, user.MustChangePassword));
 }).RequireRateLimiting("login");
 
-auth.MapGet("/me", async (
-    ClaimsPrincipal principal,
-    HttpContext httpContext,
-    AppDatabase database,
-    CancellationToken cancellationToken) =>
+auth.MapGet("/me", (ClaimsPrincipal principal) =>
 {
-    var userIdValue = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-    if (!Guid.TryParse(userIdValue, out var userId))
+    var username = principal.Identity?.Name;
+    if (string.IsNullOrWhiteSpace(username))
     {
         return Results.Unauthorized();
     }
 
-    var user = await database.GetUserByIdAsync(userId, cancellationToken);
-    if (user is null)
-    {
-        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Results.Unauthorized();
-    }
-
-    var claimRequiresChange = string.Equals(
+    var mustChangePassword = string.Equals(
         principal.FindFirstValue("must_change_password"),
         "true",
         StringComparison.OrdinalIgnoreCase);
 
-    if (claimRequiresChange != user.MustChangePassword ||
-        !string.Equals(principal.Identity?.Name, user.Username, StringComparison.Ordinal))
-    {
-        await SignInAsync(httpContext, user, rememberMe: true);
-    }
-
-    return Results.Ok(new AuthUserResponse(user.Username, user.MustChangePassword));
+    return Results.Ok(new AuthUserResponse(username, mustChangePassword));
 }).RequireAuthorization();
 
 auth.MapPost("/logout", async (HttpContext httpContext) =>
@@ -279,140 +256,6 @@ templates.MapDelete("/{id:guid}", async (
     return deleted ? Results.NoContent() : Results.NotFound();
 });
 
-var fonts = app.MapGroup("/api/fonts").RequireAuthorization();
-
-fonts.MapGet("/", async (
-    ClaimsPrincipal principal,
-    AppDatabase database,
-    CancellationToken cancellationToken) =>
-{
-    if (!TryGetUserId(principal, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    var result = await database.GetUploadedFontsAsync(userId, cancellationToken);
-    return Results.Ok(result);
-});
-
-fonts.MapGet("/{id:guid}/file", async (
-    Guid id,
-    ClaimsPrincipal principal,
-    AppDatabase database,
-    CancellationToken cancellationToken) =>
-{
-    if (!TryGetUserId(principal, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    var font = await database.GetUploadedFontFileAsync(userId, id, cancellationToken);
-    if (font is null)
-    {
-        return Results.NotFound();
-    }
-
-    return Results.File(font.Data, font.ContentType);
-});
-
-fonts.MapPost("/", async (
-    HttpRequest request,
-    ClaimsPrincipal principal,
-    AppDatabase database,
-    CancellationToken cancellationToken) =>
-{
-    const long maxFontSize = 8 * 1024 * 1024;
-
-    if (!TryGetUserId(principal, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    if (!request.HasFormContentType)
-    {
-        return Results.BadRequest(new { error = "Ожидается файл шрифта." });
-    }
-
-    IFormCollection form;
-    try
-    {
-        form = await request.ReadFormAsync(cancellationToken);
-    }
-    catch (InvalidDataException)
-    {
-        return Results.BadRequest(new { error = "Файл шрифта должен быть не больше 8 МБ." });
-    }
-
-    var file = form.Files.GetFile("file");
-    if (file is null || file.Length == 0)
-    {
-        return Results.BadRequest(new { error = "Выберите файл шрифта." });
-    }
-
-    if (file.Length > maxFontSize)
-    {
-        return Results.BadRequest(new { error = "Файл шрифта должен быть не больше 8 МБ." });
-    }
-
-    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-    var contentType = extension switch
-    {
-        ".ttf" => "font/ttf",
-        ".otf" => "font/otf",
-        ".woff" => "font/woff",
-        ".woff2" => "font/woff2",
-        _ => null
-    };
-
-    if (contentType is null)
-    {
-        return Results.BadRequest(new { error = "Поддерживаются только TTF, OTF, WOFF и WOFF2." });
-    }
-
-    await using var input = file.OpenReadStream();
-    using var buffer = new MemoryStream((int)file.Length);
-    await input.CopyToAsync(buffer, cancellationToken);
-    var data = buffer.ToArray();
-
-    if (!HasValidFontSignature(data, extension))
-    {
-        return Results.BadRequest(new { error = "Файл не похож на шрифт указанного формата." });
-    }
-
-    var requestedName = form["name"].ToString();
-    var displayName = NormalizeFontName(
-        string.IsNullOrWhiteSpace(requestedName)
-            ? Path.GetFileNameWithoutExtension(file.FileName)
-            : requestedName);
-
-    var originalFileName = Path.GetFileName(file.FileName);
-    var created = await database.CreateUploadedFontAsync(
-        userId,
-        displayName,
-        originalFileName,
-        contentType,
-        extension,
-        data,
-        cancellationToken);
-
-    return Results.Created($"api/fonts/{created.Id}", created);
-});
-
-fonts.MapDelete("/{id:guid}", async (
-    Guid id,
-    ClaimsPrincipal principal,
-    AppDatabase database,
-    CancellationToken cancellationToken) =>
-{
-    if (!TryGetUserId(principal, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    var deleted = await database.DeleteUploadedFontAsync(userId, id, cancellationToken);
-    return deleted ? Results.NoContent() : Results.NotFound();
-});
-
 app.MapPost("/api/export/word", (
     WordExportRequest request,
     WordDocumentBuilder documentBuilder) =>
@@ -490,42 +333,3 @@ static string? ValidateTemplate(SaveTemplateRequest request)
 
     return null;
 }
-
-static bool TryGetUserId(ClaimsPrincipal principal, out Guid userId) =>
-    Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
-
-static string NormalizeFontName(string value)
-{
-    var normalized = new string(value
-        .Where(character => !char.IsControl(character))
-        .ToArray())
-        .Trim();
-
-    if (string.IsNullOrWhiteSpace(normalized))
-    {
-        normalized = "Мой шрифт";
-    }
-
-    return normalized.Length > 80 ? normalized[..80] : normalized;
-}
-
-static bool HasValidFontSignature(byte[] data, string extension)
-{
-    if (data.Length < 4)
-    {
-        return false;
-    }
-
-    return extension switch
-    {
-        ".ttf" =>
-            data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x00, 0x01, 0x00, 0x00 }) ||
-            data.AsSpan(0, 4).SequenceEqual("true"u8) ||
-            data.AsSpan(0, 4).SequenceEqual("typ1"u8),
-        ".otf" => data.AsSpan(0, 4).SequenceEqual("OTTO"u8),
-        ".woff" => data.AsSpan(0, 4).SequenceEqual("wOFF"u8),
-        ".woff2" => data.AsSpan(0, 4).SequenceEqual("wOF2"u8),
-        _ => false
-    };
-}
-
