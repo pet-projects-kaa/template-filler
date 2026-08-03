@@ -365,3 +365,205 @@ output { color: #6557ce; font-variant-numeric: tabular-nums; }
     font-size: 10px;
     line-height: 1.45;
 }
+
+.swoosh-panel {
+    margin: 0 0 18px;
+    padding: 14px;
+    border: 1px solid #dde2ea;
+    border-radius: 12px;
+    background: #fbfcfe;
+}
+
+.swoosh-grid {
+    margin-bottom: 10px;
+}
+
+.compact-field-block {
+    margin-bottom: 0;
+}
+
+.compact-field-block input,
+.compact-field-block select {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #d3d9e3;
+    border-radius: 10px;
+    background: #fbfcfe;
+    padding: 0 12px;
+    color: #252a34;
+}
+
+.compact-field-block input:focus,
+.compact-field-block select:focus {
+    outline: none;
+    border-color: #6759db;
+    box-shadow: 0 0 0 4px rgba(103, 89, 219, .11);
+}
+
+.swoosh-actions {
+    margin-bottom: 8px;
+}
+
+.swoosh-gallery {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.swoosh-empty {
+    padding: 12px;
+    border-radius: 10px;
+    background: #f4f6f9;
+    color: #848d9a;
+    font-size: 11px;
+    text-align: center;
+}
+
+.swoosh-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #e1e5eb;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.swoosh-preview-wrap {
+    min-width: 0;
+}
+
+.swoosh-preview-wrap strong,
+.swoosh-preview-wrap small {
+    display: block;
+}
+
+.swoosh-preview-wrap strong {
+    color: #3e4654;
+    font-size: 12px;
+}
+
+.swoosh-preview-wrap small {
+    margin-top: 2px;
+    color: #8a929e;
+    font-size: 10px;
+}
+
+.swoosh-preview {
+    width: 100%;
+    max-width: 260px;
+    height: auto;
+    margin-top: 6px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(245,247,250,.95));
+    border: 1px solid #edf1f5;
+}
+
+.swoosh-item-actions {
+    display: grid;
+    gap: 6px;
+}
+
+.swoosh-item-actions .button {
+    min-width: 92px;
+    min-height: 36px;
+    font-size: 12px;
+}
+
+.page-canvas-wrap {
+    position: relative;
+}
+
+.page-swoosh-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.placed-swoosh {
+    position: absolute;
+    display: block;
+    pointer-events: auto;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.placed-swoosh.active {
+    z-index: 3;
+}
+
+.placed-swoosh img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.08));
+}
+
+.swoosh-remove {
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 999px;
+    background: #fff0f0;
+    color: #b42318;
+    font-size: 14px;
+    font-weight: 800;
+    box-shadow: 0 3px 8px rgba(15,23,42,.16);
+    cursor: pointer;
+}
+
+@media (max-width: 520px) {
+    .swoosh-item {
+        grid-template-columns: 1fr;
+    }
+
+    .swoosh-item-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.swoosh-resize {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    background: #6759db;
+    box-shadow: 0 3px 8px rgba(15,23,42,.20);
+    cursor: nwse-resize;
+    touch-action: none;
+}
+
+.swoosh-resize::before,
+.swoosh-resize::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 7px;
+    height: 1px;
+    background: rgba(255,255,255,.95);
+    transform: rotate(-45deg);
+    transform-origin: right center;
+}
+
+.swoosh-resize::after {
+    right: 7px;
+    bottom: 7px;
+    width: 5px;
+}
+
+.placed-swoosh.resizing {
+    outline: 2px dashed rgba(103,89,219,.75);
+    outline-offset: 4px;
+    cursor: nwse-resize;
+}

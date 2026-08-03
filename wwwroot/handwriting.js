@@ -1,7 +1,7 @@
 "use strict";
 
 const PAGE = { width: 1050, height: 1485, top: 118, right: 72, bottom: 82 };
-const STORAGE_KEY = "template-filler-handwriting-settings-v6";
+const STORAGE_KEY = "template-filler-handwriting-settings-v8";
 const MAX_PAGES = 30;
 
 const PRESETS = [
@@ -155,6 +155,12 @@ const elements = {
     uploadFontButton: document.getElementById("uploadFontButton"),
     fontUploadStatus: document.getElementById("fontUploadStatus"),
     customFontsList: document.getElementById("customFontsList"),
+    swooshMode: document.getElementById("swooshMode"),
+    swooshInitials: document.getElementById("swooshInitials"),
+    generateSwooshesButton: document.getElementById("generateSwooshesButton"),
+    clearPlacedSwooshesButton: document.getElementById("clearPlacedSwooshesButton"),
+    swooshStatus: document.getElementById("swooshStatus"),
+    swooshGallery: document.getElementById("swooshGallery"),
     paperStyle: document.getElementById("paperStyle"),
     inkStyle: document.getElementById("inkStyle"),
     fontSize: document.getElementById("fontSize"),
@@ -176,11 +182,16 @@ const elements = {
     pagesPreview: document.getElementById("pagesPreview")
 };
 
+let basePageCanvases = [];
 let pageCanvases = [];
 let activePageIndex = 0;
 let renderSeed = freshSeed();
 let renderTimer = null;
 let renderToken = 0;
+let swooshLibrary = [];
+let placedSwooshes = [];
+let swooshCounter = 0;
+let dragState = null;
 
 initialize();
 
@@ -203,6 +214,7 @@ async function initialize() {
 
         await loadFonts();
         await renderDocument();
+        generateSwooshLibrary(false);
     } catch (error) {
         console.error(error);
         elements.gate.textContent = "Не удалось открыть модуль рукописных конспектов.";
@@ -367,6 +379,23 @@ function wireEvents() {
     });
     elements.uploadFontButton.addEventListener("click", uploadCustomFont);
 
+    elements.swooshMode.addEventListener("change", () => {
+        saveSettings();
+        setSwooshStatus("");
+    });
+    elements.swooshInitials.addEventListener("input", () => {
+        saveSettings();
+    });
+    elements.generateSwooshesButton.addEventListener("click", () => generateSwooshLibrary(true));
+    elements.clearPlacedSwooshesButton.addEventListener("click", async () => {
+        if (pageCanvases.length === 0) return;
+        placedSwooshes = placedSwooshes.filter(item => item.pageIndex !== activePageIndex);
+        await applyPlacedSwooshes();
+        renderPreview();
+        saveSettings();
+        setSwooshStatus("Росчерки на текущей странице очищены.");
+    });
+
     [elements.paperStyle, elements.inkStyle, elements.recognizeHeadings].forEach(input => {
         input.addEventListener("change", () => {
             saveSettings();
@@ -517,6 +546,441 @@ function formatBytes(value) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+
+
+function setSwooshStatus(message, isError = false) {
+    elements.swooshStatus.textContent = message;
+    elements.swooshStatus.classList.toggle("error", isError);
+}
+
+function getSwooshMode() {
+    return elements.swooshMode.value === "initials" ? "initials" : "random";
+}
+
+function sanitizeInitials(value) {
+    return String(value || "")
+        .toUpperCase()
+        .replace(/[^A-ZА-ЯЁ]/gu, "")
+        .slice(0, 4);
+}
+
+function generateSwooshLibrary(showStatus = true) {
+    const mode = getSwooshMode();
+    const initials = sanitizeInitials(elements.swooshInitials.value);
+    if (mode === "initials" && !initials) {
+        setSwooshStatus("Введите 1–4 буквы, чтобы построить росчерки по инициалам.", true);
+        return;
+    }
+
+    const count = 8;
+    const baseSeed = freshSeed();
+    swooshLibrary = Array.from({ length: count }, (_, index) => buildSwooshSpec(mode, initials, normalizeSeed(baseSeed + index * 104729)));
+    renderSwooshGallery();
+    if (showStatus) {
+        setSwooshStatus(`Сгенерировано ${count} вариантов.`);
+    }
+    saveSettings();
+}
+
+function buildSwooshSpec(mode, initials, seed) {
+    const random = seeded(seed);
+    const loops = 1 + Math.floor(random() * 3);
+    const width = 320 + Math.floor(random() * 120);
+    const height = 96 + Math.floor(random() * 42);
+    const leadText = mode === "initials" ? initials : "";
+    const spec = {
+        id: `spec-${seed}`,
+        seed,
+        mode,
+        initials: leadText,
+        width,
+        height,
+        slant: -.18 + random() * .20,
+        baseline: height * (.56 + random() * .12),
+        lineCount: 1 + (random() > .65 ? 1 : 0),
+        loops,
+        tailLift: -14 + random() * 32,
+        pressure: .70 + random() * .24,
+        wave: 6 + random() * 16,
+        segments: 4 + Math.floor(random() * 4),
+        underline: random() > .32,
+        flourish: random() > .44,
+        leadScale: .75 + random() * .26,
+        gap: 14 + random() * 20
+    };
+
+    const previewCanvas = document.createElement("canvas");
+    previewCanvas.width = width;
+    previewCanvas.height = height;
+    const ctx = previewCanvas.getContext("2d");
+    drawSwooshSpec(ctx, spec, { x: 10, y: 12, width: width - 20, height: height - 24, rotation: 0, scale: 1 });
+    return {
+        id: `swoosh-${seed}`,
+        name: leadText ? `Росчерк ${leadText} · ${String(seed).slice(-3)}` : `Росчерк · ${String(seed).slice(-3)}`,
+        caption: mode === "initials" ? `По буквам: ${leadText}` : "Полностью случайный вариант",
+        previewUrl: previewCanvas.toDataURL("image/png"),
+        width,
+        height,
+        spec
+    };
+}
+
+function drawSwooshSpec(context, spec, placement) {
+    const random = seeded(spec.seed);
+    const x = placement.x || 0;
+    const y = placement.y || 0;
+    const width = placement.width || spec.width;
+    const height = placement.height || spec.height;
+    const scaleX = width / spec.width;
+    const scaleY = height / spec.height;
+    const scale = placement.scale || Math.min(scaleX, scaleY);
+    const baseline = spec.baseline;
+
+    context.save();
+    context.translate(x + width / 2, y + height / 2);
+    context.rotate(placement.rotation || 0);
+    context.translate(-width / 2, -height / 2);
+    context.scale(scaleX, scaleY);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    const strokeBlue = { r: 36, g: 76, b: 164 };
+    const makeColor = alpha => `rgba(${strokeBlue.r + (random() - .5) * 8}, ${strokeBlue.g + (random() - .5) * 8}, ${strokeBlue.b + (random() - .5) * 10}, ${alpha})`;
+
+    let leadWidth = 0;
+    if (spec.initials) {
+        context.save();
+        context.font = `${Math.round(60 * spec.leadScale)}px "Marck Script", "Bad Script", cursive`;
+        context.fillStyle = makeColor(.78 * spec.pressure);
+        context.globalAlpha = .95;
+        context.translate(18, baseline - 10);
+        context.rotate(spec.slant * .20);
+        context.fillText(spec.initials, 0, 0);
+        if (random() > .28) {
+            context.globalAlpha = .16;
+            context.fillText(spec.initials, (random() - .5) * 2.2, (random() - .5) * 1.8);
+        }
+        leadWidth = context.measureText(spec.initials).width + spec.gap;
+        context.restore();
+    }
+
+    for (let pass = 0; pass < spec.lineCount; pass += 1) {
+        const mainY = baseline + (pass * 5 - 2);
+        const startX = 16 + leadWidth + pass * 8;
+        const endX = spec.width - 18;
+        const slope = spec.tailLift + (pass * 6 - 2);
+        const amplitude = spec.wave * (.85 + random() * .4);
+        context.save();
+        context.lineWidth = 2.2 + spec.pressure * 1.6 + pass * .35;
+        context.strokeStyle = makeColor((.56 + random() * .18) * spec.pressure);
+        context.shadowColor = 'rgba(25,45,104,.08)';
+        context.shadowBlur = .6;
+        context.beginPath();
+        context.moveTo(startX, mainY);
+
+        let px = startX;
+        let py = mainY;
+        const segmentWidth = (endX - startX) / spec.segments;
+        for (let seg = 0; seg < spec.segments; seg += 1) {
+            const nx = startX + segmentWidth * (seg + 1);
+            const ny = mainY + Math.sin(seg * .9 + random() * .7) * amplitude * (.35 + random() * .55) + slope * (seg / Math.max(1, spec.segments - 1));
+            const cp1x = px + segmentWidth * (.28 + random() * .18);
+            const cp1y = py + (random() - .5) * amplitude * 1.2;
+            const cp2x = nx - segmentWidth * (.22 + random() * .16);
+            const cp2y = ny + (random() - .5) * amplitude * 1.2;
+            context.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, nx, ny);
+            px = nx;
+            py = ny;
+        }
+        context.stroke();
+
+        if (spec.flourish && pass === spec.lineCount - 1) {
+            let loopX = endX - 28;
+            let loopY = py;
+            for (let loop = 0; loop < spec.loops; loop += 1) {
+                const radius = 14 + random() * 18;
+                context.beginPath();
+                context.moveTo(loopX, loopY);
+                context.bezierCurveTo(loopX + radius, loopY - radius, loopX + radius * 1.1, loopY + radius * .9, loopX + radius * .2, loopY + radius * 1.18);
+                context.bezierCurveTo(loopX - radius * .65, loopY + radius * .8, loopX - radius * .55, loopY - radius * .9, loopX + radius * .3, loopY - radius * .4);
+                context.stroke();
+                loopX += radius * .58;
+                loopY += (random() - .5) * 6;
+            }
+        }
+
+        if (spec.underline && pass === 0) {
+            const underY = baseline + 18 + random() * 8;
+            context.beginPath();
+            context.moveTo(Math.max(12, startX - 10), underY);
+            context.bezierCurveTo(startX + 42, underY + 8, endX - 44, underY - 6, endX - 6, underY + random() * 8);
+            context.strokeStyle = makeColor((.30 + random() * .12) * spec.pressure);
+            context.lineWidth = 1.4 + random();
+            context.stroke();
+        }
+
+        context.restore();
+    }
+
+    context.restore();
+}
+
+function renderSwooshGallery() {
+    elements.swooshGallery.replaceChildren();
+    if (swooshLibrary.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "swoosh-empty";
+        empty.textContent = "Сгенерируйте росчерки, и они появятся здесь.";
+        elements.swooshGallery.append(empty);
+        return;
+    }
+
+    for (const item of swooshLibrary) {
+        const card = document.createElement("div");
+        card.className = "swoosh-item";
+
+        const previewWrap = document.createElement("div");
+        previewWrap.className = "swoosh-preview-wrap";
+        const title = document.createElement("strong");
+        title.textContent = item.name;
+        const small = document.createElement("small");
+        small.textContent = item.caption;
+        const image = document.createElement("img");
+        image.className = "swoosh-preview";
+        image.src = item.previewUrl;
+        image.alt = item.name;
+        previewWrap.append(title, small, image);
+
+        const actions = document.createElement("div");
+        actions.className = "swoosh-item-actions";
+
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className = "button secondary";
+        addButton.textContent = "На страницу";
+        addButton.addEventListener("click", async () => {
+            await placeSwooshOnActivePage(item);
+        });
+
+        const downloadButton = document.createElement("button");
+        downloadButton.type = "button";
+        downloadButton.className = "button";
+        downloadButton.textContent = "PNG";
+        downloadButton.addEventListener("click", () => downloadDataUrl(item.previewUrl, `${slugify(item.name)}.png`));
+
+        actions.append(addButton, downloadButton);
+        card.append(previewWrap, actions);
+        elements.swooshGallery.append(card);
+    }
+}
+
+async function placeSwooshOnActivePage(item) {
+    if (pageCanvases.length === 0) {
+        setSwooshStatus("Сначала сформируйте хотя бы одну страницу.", true);
+        return;
+    }
+
+    swooshCounter += 1;
+    const scale = .62;
+    const width = item.width * scale;
+    const height = item.height * scale;
+    const placed = {
+        id: `placed-${swooshCounter}`,
+        pageIndex: activePageIndex,
+        x: clamp(PAGE.width - width - 86, 18, PAGE.width - width - 18),
+        y: clamp(PAGE.height - height - 96, 18, PAGE.height - height - 18),
+        width,
+        height,
+        rotation: (-.08 + Math.random() * .16),
+        spec: item.spec,
+        previewUrl: item.previewUrl
+    };
+
+    placedSwooshes.push(placed);
+    await applyPlacedSwooshes();
+    renderPreview();
+    saveSettings();
+    setSwooshStatus(`Росчерк добавлен на страницу ${activePageIndex + 1}.`);
+}
+
+function cloneCanvas(source) {
+    const copy = document.createElement("canvas");
+    copy.width = source.width;
+    copy.height = source.height;
+    copy.getContext("2d", { alpha: false }).drawImage(source, 0, 0);
+    return copy;
+}
+
+async function applyPlacedSwooshes() {
+    pageCanvases = basePageCanvases.map(cloneCanvas);
+    for (const item of placedSwooshes) {
+        const canvas = pageCanvases[item.pageIndex];
+        if (!canvas) continue;
+        const ctx = canvas.getContext("2d");
+        drawSwooshSpec(ctx, item.spec, item);
+    }
+}
+
+function renderPlacedSwooshes(layer, pageIndex, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width / PAGE.width;
+    const scaleY = rect.height / PAGE.height;
+    const items = placedSwooshes.filter(item => item.pageIndex === pageIndex);
+    for (const item of items) {
+        const node = document.createElement("div");
+        node.className = "placed-swoosh";
+        node.dataset.id = item.id;
+        node.style.left = `${item.x * scaleX}px`;
+        node.style.top = `${item.y * scaleY}px`;
+        node.style.width = `${item.width * scaleX}px`;
+        node.style.height = `${item.height * scaleY}px`;
+        node.style.transform = `rotate(${item.rotation}rad)`;
+
+        const img = document.createElement("img");
+        img.src = item.previewUrl;
+        img.alt = "Росчерк";
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "swoosh-remove";
+        remove.textContent = "×";
+        remove.title = "Удалить росчерк";
+        remove.addEventListener("click", async event => {
+            event.stopPropagation();
+            placedSwooshes = placedSwooshes.filter(entry => entry.id !== item.id);
+            await applyPlacedSwooshes();
+            renderPreview();
+            saveSettings();
+        });
+
+        const resize = document.createElement("button");
+        resize.type = "button";
+        resize.className = "swoosh-resize";
+        resize.title = "Изменить размер";
+        resize.setAttribute("aria-label", resize.title);
+        resize.addEventListener("pointerdown", event => startSwooshResize(event, item.id, rect));
+
+        node.append(img, remove, resize);
+        node.addEventListener("pointerdown", event => {
+            if (event.target === resize || event.target === remove) return;
+            startSwooshDrag(event, item.id, pageIndex, rect);
+        });
+        layer.append(node);
+    }
+}
+
+function startSwooshDrag(event, itemId, pageIndex, rect) {
+    event.preventDefault();
+    event.stopPropagation();
+    const item = placedSwooshes.find(entry => entry.id === itemId);
+    if (!item) return;
+
+    dragState = {
+        itemId,
+        pageIndex,
+        pointerId: event.pointerId,
+        scaleX: rect.width / PAGE.width,
+        scaleY: rect.height / PAGE.height,
+        offsetX: event.clientX - rect.left - item.x * (rect.width / PAGE.width),
+        offsetY: event.clientY - rect.top - item.y * (rect.height / PAGE.height)
+    };
+
+    const target = event.currentTarget;
+    target.classList.add("active");
+    target.setPointerCapture?.(event.pointerId);
+
+    const move = moveEvent => {
+        if (!dragState || moveEvent.pointerId !== dragState.pointerId) return;
+        const card = target.closest(".page-card");
+        if (!card) return;
+        const item = placedSwooshes.find(entry => entry.id === itemId);
+        if (!item) return;
+        const newX = (moveEvent.clientX - rect.left - dragState.offsetX) / dragState.scaleX;
+        const newY = (moveEvent.clientY - rect.top - dragState.offsetY) / dragState.scaleY;
+        item.x = clamp(newX, 0, PAGE.width - item.width);
+        item.y = clamp(newY, 0, PAGE.height - item.height);
+        target.style.left = `${item.x * dragState.scaleX}px`;
+        target.style.top = `${item.y * dragState.scaleY}px`;
+    };
+
+    const finish = async finishEvent => {
+        if (!dragState || finishEvent.pointerId !== dragState.pointerId) return;
+        target.classList.remove("active");
+        target.releasePointerCapture?.(finishEvent.pointerId);
+        target.removeEventListener("pointermove", move);
+        target.removeEventListener("pointerup", finish);
+        target.removeEventListener("pointercancel", finish);
+        dragState = null;
+        await applyPlacedSwooshes();
+        renderPreview();
+        saveSettings();
+    };
+
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", finish);
+    target.addEventListener("pointercancel", finish);
+}
+
+function startSwooshResize(event, itemId, rect) {
+    event.preventDefault();
+    event.stopPropagation();
+    const item = placedSwooshes.find(entry => entry.id === itemId);
+    if (!item) return;
+
+    const target = event.currentTarget;
+    const node = target.closest(".placed-swoosh");
+    if (!node) return;
+
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    const startWidth = item.width;
+    const startHeight = item.height;
+    const aspectRatio = startWidth / Math.max(1, startHeight);
+    const scaleX = rect.width / PAGE.width;
+    const scaleY = rect.height / PAGE.height;
+
+    node.classList.add("active", "resizing");
+    target.setPointerCapture?.(event.pointerId);
+
+    const move = moveEvent => {
+        if (moveEvent.pointerId !== event.pointerId) return;
+        const deltaX = (moveEvent.clientX - startClientX) / scaleX;
+        const deltaY = (moveEvent.clientY - startClientY) / scaleY;
+        const dominantDelta = Math.abs(deltaX) >= Math.abs(deltaY * aspectRatio)
+            ? deltaX
+            : deltaY * aspectRatio;
+        const nextWidth = clamp(startWidth + dominantDelta, 110, Math.min(760, PAGE.width - item.x));
+        item.width = nextWidth;
+        item.height = nextWidth / aspectRatio;
+        node.style.width = `${item.width * scaleX}px`;
+        node.style.height = `${item.height * scaleY}px`;
+    };
+
+    const finish = async finishEvent => {
+        if (finishEvent.pointerId !== event.pointerId) return;
+        node.classList.remove("active", "resizing");
+        target.releasePointerCapture?.(finishEvent.pointerId);
+        target.removeEventListener("pointermove", move);
+        target.removeEventListener("pointerup", finish);
+        target.removeEventListener("pointercancel", finish);
+        await applyPlacedSwooshes();
+        renderPreview();
+        saveSettings();
+        setSwooshStatus("Размер росчерка изменён.");
+    };
+
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", finish);
+    target.addEventListener("pointercancel", finish);
+}
+
+function slugify(value) {
+    return String(value || "roscherk")
+        .toLowerCase()
+        .replace(/[^a-zа-яё0-9]+/giu, "-")
+        .replace(/^-+|-+$/g, "") || "roscherk";
+}
+
 function scheduleRender(delay) {
     clearTimeout(renderTimer);
     renderTimer = setTimeout(renderDocument, delay);
@@ -575,8 +1039,10 @@ async function renderDocument() {
             return;
         }
 
-        pageCanvases = result.pages;
-        activePageIndex = Math.min(activePageIndex, Math.max(0, pageCanvases.length - 1));
+        basePageCanvases = result.pages;
+        placedSwooshes = placedSwooshes.filter(item => item.pageIndex < basePageCanvases.length);
+        activePageIndex = Math.min(activePageIndex, Math.max(0, basePageCanvases.length - 1));
+        await applyPlacedSwooshes();
         renderPreview();
 
         const warning = result.truncated ? ` · показаны первые ${MAX_PAGES}` : "";
@@ -861,7 +1327,15 @@ function renderPreview() {
         card.tabIndex = 0;
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", `Выбрать страницу ${index + 1}`);
-        card.append(canvas);
+
+        const canvasWrap = document.createElement("div");
+        canvasWrap.className = "page-canvas-wrap";
+        canvasWrap.append(canvas);
+
+        const layer = document.createElement("div");
+        layer.className = "page-swoosh-layer";
+        canvasWrap.append(layer);
+        card.append(canvasWrap);
 
         const label = document.createElement("div");
         label.className = "page-label";
@@ -882,6 +1356,7 @@ function renderPreview() {
             }
         });
         elements.pagesPreview.append(card);
+        requestAnimationFrame(() => renderPlacedSwooshes(layer, index, canvas));
     });
 }
 
@@ -954,6 +1429,7 @@ function setBusy(value) {
     elements.regenerateButton.disabled = value;
     elements.downloadCurrentButton.disabled = value;
     elements.printButton.disabled = value;
+    elements.generateSwooshesButton.disabled = value;
 }
 
 function saveSettings() {
@@ -966,7 +1442,10 @@ function saveSettings() {
         naturalness: elements.naturalness.value,
         leftMargin: elements.leftMargin.value,
         recognizeHeadings: elements.recognizeHeadings.checked,
-        sourceText: elements.sourceText.value
+        sourceText: elements.sourceText.value,
+        swooshMode: elements.swooshMode.value,
+        swooshInitials: elements.swooshInitials.value,
+        placedSwooshes
     };
 
     try {
@@ -997,8 +1476,16 @@ function restoreSettings() {
     setRangeValue(elements.naturalness, data.naturalness);
     setRangeValue(elements.leftMargin, data.leftMargin);
     elements.recognizeHeadings.checked = data.recognizeHeadings !== false;
+    setSelectValue(elements.swooshMode, data.swooshMode);
+    if (typeof data.swooshInitials === "string") {
+        elements.swooshInitials.value = data.swooshInitials;
+    }
     if (typeof data.sourceText === "string") {
         elements.sourceText.value = data.sourceText;
+    }
+    if (Array.isArray(data.placedSwooshes)) {
+        placedSwooshes = data.placedSwooshes.filter(item => item && typeof item.pageIndex === "number" && item.spec);
+        swooshCounter = placedSwooshes.reduce((max, item) => Math.max(max, Number(item.id?.split("-").pop()) || 0), 0);
     }
 }
 

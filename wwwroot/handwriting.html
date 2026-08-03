@@ -86,6 +86,38 @@
                 <p class="custom-font-note">Загружайте только файлы, которые вам разрешено использовать. Шрифты сохраняются в базе приложения и доступны после входа с любого устройства.</p>
             </section>
 
+            <section class="swoosh-panel" aria-labelledby="swooshTitle">
+                <div class="custom-font-heading">
+                    <div>
+                        <strong id="swooshTitle">Росчерки</strong>
+                        <small>Случайные декоративные росчерки синей шариковой ручкой для конспектов</small>
+                    </div>
+                </div>
+
+                <div class="two-columns swoosh-grid">
+                    <label class="field compact-field-block">
+                        <span>Режим</span>
+                        <select id="swooshMode">
+                            <option value="random" selected>Полностью случайные</option>
+                            <option value="initials">По буквам имени/фамилии</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field-block">
+                        <span>Буквы</span>
+                        <input id="swooshInitials" maxlength="10" placeholder="Например: АА или АБ">
+                    </label>
+                </div>
+
+                <div class="primary-actions swoosh-actions">
+                    <button id="generateSwooshesButton" class="button secondary grow" type="button">Сгенерировать росчерки</button>
+                    <button id="clearPlacedSwooshesButton" class="button" type="button">Очистить на странице</button>
+                </div>
+
+                <div id="swooshStatus" class="font-upload-status" role="status" aria-live="polite"></div>
+                <div id="swooshGallery" class="swoosh-gallery"></div>
+                <p class="custom-font-note">Нажмите «На страницу», чтобы поместить росчерк на выбранную страницу. Затем его можно перетаскивать, изменять размер за нижний правый маркер и удалять крестиком. Росчерки всегда генерируются заново и не повторяют конкретные подписи реальных людей.</p>
+            </section>
+
             <div class="two-columns">
                 <label class="field">
                     <span>Бумага</span>
