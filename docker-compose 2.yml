@@ -1,9 +1,0 @@
-services:
-  template-filler:
-    build: .
-    container_name: template-filler
-    ports:
-      - "5080:8080"
-    volumes:
-      - ./data:/app/App_Data
-    restart: unless-stopped
