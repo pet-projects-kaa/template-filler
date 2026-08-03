@@ -462,13 +462,17 @@ function beginSignatureInteraction(event) {
 
   event.preventDefault();
   state.selectedPlacedId = current.instanceId;
-  renderPlacedSignatures();
-  layer.setPointerCapture?.(event.pointerId);
+  updatePlacedSelection();
+  syncSignatureControls();
+
+  const canvas = el("signatureCanvas");
+  canvas.setPointerCapture?.(event.pointerId);
   const resize = event.target.classList.contains("resize-handle");
   state.drag = {
     mode: resize ? "resize" : "move",
     pointerId: event.pointerId,
     instanceId: current.instanceId,
+    layer,
     startX: event.clientX,
     startY: event.clientY,
     originalX: current.x,
@@ -479,7 +483,7 @@ function beginSignatureInteraction(event) {
 
 function moveSignatureInteraction(event) {
   if (!state.drag || event.pointerId !== state.drag.pointerId) return;
-  const current = getSelectedPlaced();
+  const current = state.placedSignatures.find(item => item.instanceId === state.drag.instanceId);
   if (!current) return;
 
   const dx = event.clientX - state.drag.startX;
@@ -495,12 +499,30 @@ function moveSignatureInteraction(event) {
     current.y = state.drag.originalY + dy;
     clampPlacedSignature(current);
   }
-  renderPlacedSignatures();
+
+  applyPlacedSignatureStyle(state.drag.layer, current);
 }
 
 function endSignatureInteraction(event) {
   if (!state.drag || event.pointerId !== state.drag.pointerId) return;
+  el("signatureCanvas").releasePointerCapture?.(event.pointerId);
   state.drag = null;
+  syncSignatureControls();
+}
+
+function updatePlacedSelection() {
+  for (const layer of el("signatureCanvas").querySelectorAll(".signature-instance")) {
+    layer.classList.toggle("selected", layer.dataset.instanceId === state.selectedPlacedId);
+  }
+}
+
+function applyPlacedSignatureStyle(layer, item) {
+  if (!layer || !item) return;
+  layer.style.left = `${item.x}px`;
+  layer.style.top = `${item.y}px`;
+  layer.style.width = `${item.baseWidth * item.scale}px`;
+  layer.style.height = `${item.baseHeight * item.scale}px`;
+  layer.style.transform = `rotate(${item.rotation}deg)`;
 }
 
 function moveSignatureWithKeyboard(event) {
