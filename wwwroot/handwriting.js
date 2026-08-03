@@ -10,7 +10,18 @@ const state = {
   customBackground: null,
   placedSignatures: [],
   selectedPlacedId: null,
-  drag: null
+  drag: null,
+  textTransform: {
+    x: 0,
+    y: 0,
+    scaleX: 1,
+    scaleY: 1,
+    rotation: 0,
+    perspectiveX: 0,
+    perspectiveY: 0,
+    bend: 0
+  },
+  textDrag: null
 };
 
 const DB_NAME = "template-filler-handwriting";
@@ -43,6 +54,7 @@ async function init() {
     wire();
     applyBackground();
     renderText();
+    updateTextTransformMode();
     renderSignatures();
     renderPlacedSignatures();
 
@@ -60,6 +72,20 @@ function wire() {
 
   ["sourceText", "fontSize", "slant", "lineHeight", "jitter", "fontFamily"]
     .forEach(id => el(id).addEventListener("input", renderText));
+
+  el("textTransformMode").addEventListener("change", updateTextTransformMode);
+  el("textScaleX").addEventListener("input", updateTextTransformFromControls);
+  el("textScaleY").addEventListener("input", updateTextTransformFromControls);
+  el("textRotation").addEventListener("input", updateTextTransformFromControls);
+  el("textPerspectiveX").addEventListener("input", updateTextTransformFromControls);
+  el("textPerspectiveY").addEventListener("input", updateTextTransformFromControls);
+  el("textBend").addEventListener("input", updateTextTransformFromControls);
+  el("resetTextTransform").onclick = resetTextTransform;
+
+  const textLayer = el("textTransformLayer");
+  textLayer.addEventListener("pointerdown", beginTextInteraction);
+  window.addEventListener("pointermove", moveTextInteraction);
+  window.addEventListener("pointerup", endTextInteraction);
 
   el("fontUpload").addEventListener("change", uploadFont);
   el("backgroundPreset").addEventListener("change", applyBackground);
@@ -85,7 +111,8 @@ function wire() {
   el("duplicateSignature").onclick = duplicateSelectedSignature;
   el("removeSignature").onclick = removeSelectedSignature;
   el("clearAllSignatures").onclick = clearAllSignatures;
-  el("printNotes").onclick = () => window.print();
+  el("printNotes").onclick = printNotesWithBackground;
+  window.addEventListener("afterprint", cleanupPrintBackground);
 
   el("signatureSearch").oninput = filterSignatures;
   el("shuffleButton").onclick = () => {
@@ -128,15 +155,133 @@ function setTab(tab) {
 
 function renderText() {
   const target = el("handwrittenText");
-  target.textContent = el("sourceText").value;
+  target.replaceChildren();
+
+  const lines = el("sourceText").value.split("\n");
+  const bend = state.textTransform.bend;
+  const denominator = Math.max(1, lines.length - 1);
+
+  lines.forEach((line, index) => {
+    const row = document.createElement("span");
+    row.className = "handwritten-line";
+    row.textContent = line || "\u00a0";
+
+    const normalized = index / denominator * 2 - 1;
+    const curve = bend * (normalized * normalized);
+    const side = Math.sign(bend || 1);
+    row.style.transform = `translateX(${curve * side}px) scaleX(${1 - Math.min(.18, Math.abs(bend) / 220) * Math.abs(normalized)})`;
+    row.style.transformOrigin = bend >= 0 ? "left center" : "right center";
+    target.append(row);
+  });
+
   target.style.fontSize = `${el("fontSize").value}px`;
   target.style.lineHeight = `${el("lineHeight").value}px`;
   target.style.fontFamily = `"${el("fontFamily").value}", cursive`;
-  target.style.transform = `skewX(${-Number(el("slant").value)}deg)`;
+  target.style.setProperty("--writing-slant", `${-Number(el("slant").value)}deg`);
   const jitter = Number(el("jitter").value);
   target.style.textShadow = jitter
     ? `${jitter * .25}px ${jitter * .15}px 0 rgba(23,35,142,.16)`
     : "none";
+
+  applyTextTransform();
+}
+
+function updateTextTransformMode() {
+  el("textTransformLayer").classList.toggle("editing", el("textTransformMode").checked);
+}
+
+function updateTextTransformFromControls() {
+  state.textTransform.scaleX = Number(el("textScaleX").value) / 100;
+  state.textTransform.scaleY = Number(el("textScaleY").value) / 100;
+  state.textTransform.rotation = Number(el("textRotation").value);
+  state.textTransform.perspectiveX = Number(el("textPerspectiveX").value);
+  state.textTransform.perspectiveY = Number(el("textPerspectiveY").value);
+  state.textTransform.bend = Number(el("textBend").value);
+  renderText();
+}
+
+function syncTextTransformControls() {
+  const value = state.textTransform;
+  el("textScaleX").value = String(Math.round(value.scaleX * 100));
+  el("textScaleY").value = String(Math.round(value.scaleY * 100));
+  el("textRotation").value = String(Math.round(value.rotation));
+  el("textPerspectiveX").value = String(Math.round(value.perspectiveX));
+  el("textPerspectiveY").value = String(Math.round(value.perspectiveY));
+  el("textBend").value = String(Math.round(value.bend));
+}
+
+function applyTextTransform() {
+  const layer = el("textTransformLayer");
+  const value = state.textTransform;
+  layer.style.transform = [
+    `translate(${value.x}px, ${value.y}px)`,
+    "perspective(900px)",
+    `rotateZ(${value.rotation}deg)`,
+    `rotateY(${value.perspectiveX}deg)`,
+    `rotateX(${value.perspectiveY}deg)`,
+    `scale(${value.scaleX}, ${value.scaleY})`
+  ].join(" ");
+}
+
+function beginTextInteraction(event) {
+  if (!el("textTransformMode").checked) return;
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+
+  const handle = event.target.closest("[data-text-handle]")?.dataset.textHandle || "move";
+  const value = state.textTransform;
+  state.textDrag = {
+    pointerId: event.pointerId,
+    mode: handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    original: { ...value }
+  };
+  el("textTransformLayer").setPointerCapture?.(event.pointerId);
+}
+
+function moveTextInteraction(event) {
+  const drag = state.textDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const dx = event.clientX - drag.startX;
+  const dy = event.clientY - drag.startY;
+  const value = state.textTransform;
+
+  if (drag.mode === "resize") {
+    value.scaleX = Math.min(1.8, Math.max(.45, drag.original.scaleX + dx / 420));
+    value.scaleY = Math.min(1.8, Math.max(.45, drag.original.scaleY + dy / 520));
+  } else if (drag.mode === "perspective-x") {
+    value.perspectiveX = Math.min(55, Math.max(-55, drag.original.perspectiveX + dx / 4));
+  } else if (drag.mode === "perspective-y") {
+    value.perspectiveY = Math.min(45, Math.max(-45, drag.original.perspectiveY - dy / 4));
+  } else {
+    value.x = drag.original.x + dx;
+    value.y = drag.original.y + dy;
+  }
+
+  syncTextTransformControls();
+  applyTextTransform();
+}
+
+function endTextInteraction(event) {
+  if (!state.textDrag || event.pointerId !== state.textDrag.pointerId) return;
+  el("textTransformLayer").releasePointerCapture?.(event.pointerId);
+  state.textDrag = null;
+}
+
+function resetTextTransform() {
+  state.textTransform = {
+    x: 0,
+    y: 0,
+    scaleX: 1,
+    scaleY: 1,
+    rotation: 0,
+    perspectiveX: 0,
+    perspectiveY: 0,
+    bend: 0
+  };
+  syncTextTransformControls();
+  renderText();
 }
 
 async function loadUploadedFonts() {
@@ -646,6 +791,115 @@ function loadImage(src) {
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
+}
+
+async function printNotesWithBackground() {
+  const button = el("printNotes");
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = "Подготавливаем PDF…";
+
+  try {
+    const dataUrl = await buildPrintBackground();
+    const image = el("printBackground");
+    await setImageSource(image, dataUrl);
+    document.body.classList.add("print-prepared");
+
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    window.print();
+  } catch (error) {
+    console.error(error);
+    showToast("Не удалось подготовить фон для PDF", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+function cleanupPrintBackground() {
+  document.body.classList.remove("print-prepared");
+}
+
+async function buildPrintBackground() {
+  const paper = el("paper");
+  const width = Math.max(1, Math.round(paper.clientWidth));
+  const height = Math.max(1, Math.round(paper.clientHeight));
+  const scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const context = canvas.getContext("2d");
+  context.scale(scale, scale);
+
+  const preset = el("backgroundPreset").value;
+
+  if (preset === "custom" && state.customBackground) {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    const background = await loadImage(state.customBackground);
+    drawImageCover(context, background, width, height);
+  } else {
+    const yellow = preset === "yellow";
+    context.fillStyle = yellow ? "#fff8d7" : "#ffffff";
+    context.fillRect(0, 0, width, height);
+
+    if (preset === "lined" || preset === "yellow") {
+      context.strokeStyle = yellow ? "rgba(198,178,102,.55)" : "#b8d3ef";
+      context.lineWidth = 1;
+      for (let y = 38.5; y < height; y += 39) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(width, y);
+        context.stroke();
+      }
+    } else if (preset === "grid") {
+      context.strokeStyle = "#bdd5ed";
+      context.lineWidth = 1;
+      for (let x = 38.5; x < width; x += 38) {
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x, height);
+        context.stroke();
+      }
+      for (let y = 38.5; y < height; y += 38) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(width, y);
+        context.stroke();
+      }
+    }
+
+    if (preset !== "blank") {
+      context.strokeStyle = "#efaaa9";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(82, 0);
+      context.lineTo(82, height);
+      context.stroke();
+    }
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
+function drawImageCover(context, image, targetWidth, targetHeight) {
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const ratio = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const width = sourceWidth * ratio;
+  const height = sourceHeight * ratio;
+  const x = (targetWidth - width) / 2;
+  const y = (targetHeight - height) / 2;
+  context.drawImage(image, x, y, width, height);
+}
+
+function setImageSource(image, source) {
+  return new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = reject;
+    image.src = source;
+    if (image.complete && image.naturalWidth) resolve();
+  });
 }
 
 async function loadStoredAssets() {

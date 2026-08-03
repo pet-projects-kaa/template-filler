@@ -65,6 +65,35 @@
           </label>
         </div>
 
+
+        <section class="control-section">
+          <div class="section-title">Положение и перспектива текста</div>
+          <label class="check"><input id="textTransformMode" type="checkbox"> Редактировать текст прямо на листе</label>
+          <div class="control-grid">
+            <label>Масштаб по ширине
+              <input id="textScaleX" type="range" min="45" max="180" value="100">
+            </label>
+            <label>Масштаб по высоте
+              <input id="textScaleY" type="range" min="45" max="180" value="100">
+            </label>
+            <label>Поворот
+              <input id="textRotation" type="range" min="-30" max="30" value="0">
+            </label>
+            <label>Перспектива по горизонтали
+              <input id="textPerspectiveX" type="range" min="-55" max="55" value="0">
+            </label>
+            <label>Перспектива по вертикали
+              <input id="textPerspectiveY" type="range" min="-45" max="45" value="0">
+            </label>
+            <label>Изгиб текста
+              <input id="textBend" type="range" min="-35" max="35" value="0">
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="resetTextTransform" class="button" type="button">Сбросить положение текста</button>
+          </div>
+          <p class="muted">Включи режим и тяни текст за область. Круглый маркер меняет размер, верхний — горизонтальную перспективу, левый — вертикальную. «Изгиб» помогает уложить строки на слегка согнутый лист.</p>
+        </section>
         <section class="control-section">
           <div class="section-title">Фон листа</div>
           <label>Тип фона
@@ -111,8 +140,14 @@
 
       <div class="paper-wrap">
         <article id="paper" class="paper background-lined" aria-label="Предпросмотр рукописного текста">
+          <img id="printBackground" class="print-background" alt="" aria-hidden="true">
           <div class="paper-margin"></div>
-          <div id="handwrittenText" class="handwritten-text"></div>
+          <div id="textTransformLayer" class="text-transform-layer">
+            <div id="handwrittenText" class="handwritten-text"></div>
+            <span class="text-handle text-resize-handle" data-text-handle="resize" title="Масштабировать текст"></span>
+            <span class="text-handle text-perspective-x-handle" data-text-handle="perspective-x" title="Горизонтальная перспектива"></span>
+            <span class="text-handle text-perspective-y-handle" data-text-handle="perspective-y" title="Вертикальная перспектива"></span>
+          </div>
           <div id="signatureCanvas" class="signature-canvas"></div>
         </article>
       </div>
