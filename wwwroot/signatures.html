@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Библиотека синтетических подписей</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="signatures.css">
+</head>
+<body>
+<div id="signatureApp" class="signature-app hidden">
+    <header class="signature-header">
+        <div>
+            <a class="back-link" href="./">← К шаблонам</a>
+            <h1>Библиотека подписей</h1>
+            <p>500 синтетических росчерков, не связанных с реальными людьми.</p>
+        </div>
+        <div class="signature-controls">
+            <label>
+                <span>Поиск по номеру</span>
+                <input id="signatureSearch" type="search" placeholder="Например: 125">
+            </label>
+            <button id="shuffleButton" class="button primary" type="button">Перемешать</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="signatureStats" class="signature-stats"></div>
+        <section id="signatureGrid" class="signature-grid" aria-live="polite"></section>
+    </main>
+</div>
+
+<div id="signatureLoading" class="signature-loading">Загрузка библиотеки…</div>
+<script src="signatures.js" defer></script>
+</body>
+</html>

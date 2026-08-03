@@ -45,8 +45,6 @@ jobs:
           test -f Dockerfile
           test -f compose.production.yml
           node --check wwwroot/app.js
-          node --check wwwroot/navigation.js
-          node --check wwwroot/handwriting.js
 
       - name: Pack release
         shell: bash

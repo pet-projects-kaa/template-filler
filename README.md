@@ -85,3 +85,7 @@ http://localhost:5080
 ```bash
 docker compose up -d --build
 ```
+
+## Библиотека синтетических подписей
+
+В `wwwroot/signatures/` добавлены 500 SVG-росчерков. Страница просмотра: `/signatures.html`.
