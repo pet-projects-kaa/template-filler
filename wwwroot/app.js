@@ -4,7 +4,8 @@ const $ = id => document.getElementById(id);
 const state = {
   user: null, section: "templates", templates: [], currentTemplate: null, templateMode: "editor",
   assets: { signature: [], font: [], background: [] }, builtInSignatures: [], gallery: [],
-  hand: { x:105,y:55,w:620,h:850,rotation:0,skewX:0,skewY:0,drag:null,signatures:[],selectedSignature:null }
+  hand: { x:105,y:55,w:620,h:850,rotation:0,skewX:0,skewY:0,drag:null,signatures:[],selectedSignature:null },
+  signatureView: { query:"", visible:60 }, renderedSections: new Set()
 };
 const sectionMeta = {
   templates:["Набивалка шаблонов","Создание, заполнение и экспорт документов."],
@@ -66,6 +67,8 @@ function wire(){
   const box=$("handTextBox"); box.addEventListener("pointerdown",startHandTransform); window.addEventListener("pointermove",moveHandTransform); window.addEventListener("pointerup",endHandTransform);
   $("handSignatures").addEventListener("pointerdown",startSignatureDrag);
 
+  $("signatureSearch").oninput=e=>{state.signatureView.query=e.target.value.trim().toLocaleLowerCase("ru");state.signatureView.visible=60;renderSignatureGrid();};
+  $("loadMoreSignatures").onclick=()=>{state.signatureView.visible+=60;renderSignatureGrid();};
   $("signatureUpload").onchange=e=>uploadAssets("signature",e.target.files,e.target);
   $("fontUpload").onchange=e=>uploadAssets("font",e.target.files,e.target);
   $("backgroundUpload").onchange=e=>uploadAssets("background",e.target.files,e.target);
@@ -104,7 +107,6 @@ async function loadWorkspaceSafely(){
   }
   if(!state.currentTemplate) createTemplateDraft();
   renderHandwriting();
-  renderAllAssets();
   if(failures.length) showToast(`Вход выполнен, но не удалось загрузить: ${failures.join(", ")}`,true);
 }
 
@@ -159,7 +161,17 @@ async function changePassword(e){
 
 function openDrawer(){ $("drawer").classList.add("open"); $("drawerBackdrop").classList.remove("hidden"); }
 function closeDrawer(){ $("drawer").classList.remove("open"); $("drawerBackdrop").classList.add("hidden"); }
-function showSection(name){state.section=name;document.querySelectorAll(".section").forEach(s=>s.classList.toggle("active",s.id===`section-${name}`));document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.section===name));[$("sectionTitle").textContent,$("sectionSubtitle").textContent]=sectionMeta[name];closeDrawer();if(name==="gallery")loadGallery();}
+function showSection(name){
+  state.section=name;
+  document.querySelectorAll(".section").forEach(s=>s.classList.toggle("active",s.id===`section-${name}`));
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.section===name));
+  [$("sectionTitle").textContent,$("sectionSubtitle").textContent]=sectionMeta[name];
+  closeDrawer();
+  if(name==="signatures")renderSignatureGrid();
+  else if(name==="fonts")renderFontGrid();
+  else if(name==="backgrounds")renderBackgroundGrid();
+  else if(name==="gallery")loadGallery();
+}
 
 async function loadTemplates(){state.templates=await api("api/templates");renderTemplateList();}
 function renderTemplateList(){const q=$("templateSearch").value.trim().toLowerCase();$("templateList").replaceChildren(...state.templates.filter(t=>t.name.toLowerCase().includes(q)).map(t=>{const b=document.createElement("button");b.className="template-item"+(state.currentTemplate?.id===t.id?" active":"");b.innerHTML=`<strong>${escapeHtml(t.name)}</strong><span>${formatDate(t.updatedAt)}</span>`;b.onclick=()=>openTemplate(t.id);return b;}));}
@@ -178,8 +190,18 @@ async function saveFilledToGallery(){const title=$("templateName").value.trim()|
 async function exportTemplateWord(){const blocks=htmlToWordBlocks($("fillDocument"));const r=await fetch("api/export/word",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileName:$("templateName").value,blocks})});if(!r.ok)throw new Error("Не удалось создать Word");downloadBlob(await r.blob(),`${safeName($("templateName").value)}.docx`);}
 function htmlToWordBlocks(root){return [...root.children].map(x=>({kind:"paragraph",paragraph:{alignment:getComputedStyle(x).textAlign,headingLevel:null,runs:[{text:x.innerText,bold:false,italic:false,underline:false,strike:false,fontSize:12,color:"000000",break:false}]},rows:null}));}
 
-async function loadAssets(){const all=await api("api/assets");state.assets.signature=all.filter(x=>x.type==="signature");state.assets.font=all.filter(x=>x.type==="font");state.assets.background=all.filter(x=>x.type==="background");await registerFonts();renderAllAssets();populateHandSelects();}
-async function loadBuiltInSignatures(){try{state.builtInSignatures=await (await fetch("signatures-manifest.json",{cache:"no-store"})).json();}catch{state.builtInSignatures=[];}renderSignatureGrid();}
+async function loadAssets(){
+  const all=await api("api/assets");
+  state.assets.signature=all.filter(x=>x.type==="signature");
+  state.assets.font=all.filter(x=>x.type==="font");
+  state.assets.background=all.filter(x=>x.type==="background");
+  registerFontsInBackground();
+  populateHandSelects();
+  if(state.section==="signatures")renderSignatureGrid();
+  if(state.section==="fonts")renderFontGrid();
+  if(state.section==="backgrounds")renderBackgroundGrid();
+}
+async function loadBuiltInSignatures(){try{state.builtInSignatures=await (await fetch("signatures-manifest.json",{cache:"no-store"})).json();}catch{state.builtInSignatures=[];}if(state.section==="signatures")renderSignatureGrid();}
 function assetUrl(a){return `api/assets/${a.id}/file`;}
 async function uploadAssets(type,files,input){
   const selected=[...(files||[])];
@@ -217,14 +239,23 @@ async function uploadAssets(type,files,input){
 }
 async function deleteAsset(id){await api(`api/assets/${id}`,{method:"DELETE"});await loadAssets();}
 function renderAllAssets(){renderSignatureGrid();renderFontGrid();renderBackgroundGrid();}
-function renderSignatureGrid(){const built=state.builtInSignatures.map(x=>({id:`builtin-${x.id}`,name:x.title,url:x.file,builtin:true}));const custom=state.assets.signature.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x}));renderAssetCards($("signatureGrid"),[...custom,...built],"signature");}
-function renderFontGrid(){const defaults=[{id:"default-segoe",name:"Segoe Print",url:null,builtin:true},{id:"default-comic",name:"Comic Sans MS",url:null,builtin:true}];renderAssetCards($("fontGrid"),[...state.assets.font.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x})),...defaults],"font");}
+function renderSignatureGrid(){
+  const built=state.builtInSignatures.map(x=>({id:`builtin-${x.id}`,name:x.title,url:x.file,builtin:true}));
+  const custom=state.assets.signature.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x}));
+  const query=state.signatureView.query;
+  const all=[...custom,...built].filter(item=>!query||`${item.name} ${item.id}`.toLocaleLowerCase("ru").includes(query));
+  const visible=all.slice(0,state.signatureView.visible);
+  renderAssetCards($("signatureGrid"),visible,"signature");
+  $("signatureCount").textContent=`Показано ${visible.length} из ${all.length}`;
+  $("loadMoreSignatures").classList.toggle("hidden",visible.length>=all.length);
+}
+function renderFontGrid(){for(const a of state.assets.font)ensureFontAssetLoaded(a);const defaults=[{id:"default-segoe",name:"Segoe Print",url:null,builtin:true},{id:"default-comic",name:"Comic Sans MS",url:null,builtin:true}];renderAssetCards($("fontGrid"),[...state.assets.font.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x})),...defaults],"font");}
 function renderBackgroundGrid(){const defaults=[{id:"lined",name:"Тетрадь в линейку",preset:"lined",builtin:true},{id:"grid",name:"Тетрадь в клетку",preset:"grid",builtin:true},{id:"blank",name:"Белый лист",preset:"blank",builtin:true},{id:"yellow",name:"Жёлтая бумага",preset:"yellow",builtin:true}];renderAssetCards($("backgroundGrid"),[...state.assets.background.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x})),...defaults],"background");}
-function renderAssetCards(root,items,type){root.replaceChildren(...items.map(item=>{const card=document.createElement("article");card.className="asset-card";const preview=document.createElement("div");preview.className="asset-preview"+(type==="background"?" background-thumb":"");if(type==="font"){preview.classList.add("font-sample");preview.textContent="Пример рукописного текста";preview.style.fontFamily=item.record?`"${fontFamilyForAsset(item.record)}", cursive`:`"${item.name}", cursive`;if(item.record?.fontLoadError){preview.classList.add("font-load-error");preview.title="Браузер не смог прочитать файл шрифта";}}else if(type==="background"&&item.preset){preview.classList.add(`hand-paper`,item.preset);preview.style.height="130px";}else{const img=new Image();img.src=item.url;preview.append(img);}const actions=document.createElement("div");actions.className="asset-actions";const use=document.createElement("button");use.textContent=type==="signature"?"Добавить на лист":"Использовать";use.onclick=()=>useAsset(type,item);actions.append(use);if(item.record){const del=document.createElement("button");del.textContent="Удалить";del.onclick=()=>deleteAsset(item.id);actions.append(del);}card.append(preview,Object.assign(document.createElement("div"),{className:"asset-name",textContent:item.name}),actions);return card;}));}
+function renderAssetCards(root,items,type){root.replaceChildren(...items.map(item=>{const card=document.createElement("article");card.className="asset-card";const preview=document.createElement("div");preview.className="asset-preview"+(type==="background"?" background-thumb":"");if(type==="font"){preview.classList.add("font-sample");preview.textContent="Пример рукописного текста";preview.style.fontFamily=item.record?`"${fontFamilyForAsset(item.record)}", cursive`:`"${item.name}", cursive`;if(item.record?.fontLoadError){preview.classList.add("font-load-error");preview.title="Браузер не смог прочитать файл шрифта";}}else if(type==="background"&&item.preset){preview.classList.add(`hand-paper`,item.preset);preview.style.height="130px";}else{const img=new Image();img.loading="lazy";img.decoding="async";img.src=item.url;preview.append(img);}const actions=document.createElement("div");actions.className="asset-actions";const use=document.createElement("button");use.textContent=type==="signature"?"Добавить на лист":"Использовать";use.onclick=()=>useAsset(type,item);actions.append(use);if(item.record){const del=document.createElement("button");del.textContent="Удалить";del.onclick=()=>deleteAsset(item.id);actions.append(del);}card.append(preview,Object.assign(document.createElement("div"),{className:"asset-name",textContent:item.name}),actions);return card;}));}
 function useAsset(type,item){if(type==="font"){$("handFont").value=item.record?`asset:${item.id}`:item.name;renderHandwriting();showSection("handwriting");}else if(type==="background"){$("handBackground").value=item.record?`asset:${item.id}`:item.preset;applyHandBackground();showSection("handwriting");}else{addHandSignature(item);showSection("handwriting");}}
 function fontFamilyForAsset(asset){return `AssetFont_${String(asset.id).replaceAll("-","")}`;}
-async function registerFonts(){
-  await Promise.all(state.assets.font.map(async asset=>{
+function registerFontsInBackground(){
+  for(const asset of state.assets.font){
     const family=fontFamilyForAsset(asset);
     asset.fontLoadError=false;
     try{
@@ -232,7 +263,6 @@ async function registerFonts(){
         const existing=[...document.fonts].find(face=>face.family===family);
         if(!existing){
           const face=new FontFace(family,`url("${assetUrl(asset)}?v=${encodeURIComponent(asset.size||0)}")`,{display:"swap"});
-          await face.load();
           document.fonts.add(face);
         }
       }else if(!document.getElementById(`font-${asset.id}`)){
@@ -241,12 +271,13 @@ async function registerFonts(){
         st.textContent=`@font-face{font-family:"${family}";src:url("${assetUrl(asset)}") format("${fontFormat(asset.contentType)}");font-display:swap}`;
         document.head.append(st);
       }
-      await document.fonts.load(`24px "${family}"`);
-    }catch(error){
-      asset.fontLoadError=true;
-      console.error(`Не удалось загрузить шрифт ${asset.name}`,error);
-    }
-  }));
+    }catch(error){asset.fontLoadError=true;console.error(`Не удалось зарегистрировать шрифт ${asset.name}`,error);}
+  }
+}
+async function ensureFontAssetLoaded(asset){
+  if(!asset)return;
+  const family=fontFamilyForAsset(asset);
+  try{await document.fonts.load(`24px "${family}"`);}catch(error){asset.fontLoadError=true;console.error(`Не удалось загрузить шрифт ${asset.name}`,error);}
 }
 function fontFormat(contentType){return contentType==="font/woff2"?"woff2":contentType==="font/woff"?"woff":contentType==="font/otf"?"opentype":"truetype";}
 function populateHandSelects(){const f=$("handFont"),bg=$("handBackground");const currentF=f.value,currentB=bg.value;f.innerHTML='<option value="Segoe Print">Segoe Print</option><option value="Comic Sans MS">Comic Sans MS</option>'+state.assets.font.map(a=>`<option value="asset:${a.id}">${escapeHtml(a.name)}</option>`).join("");bg.innerHTML='<option value="lined">Линейка</option><option value="grid">Клетка</option><option value="blank">Белый</option><option value="yellow">Жёлтый</option>'+state.assets.background.map(a=>`<option value="asset:${a.id}">${escapeHtml(a.name)}</option>`).join("");if([...f.options].some(o=>o.value===currentF))f.value=currentF;if([...bg.options].some(o=>o.value===currentB))bg.value=currentB;}
@@ -293,7 +324,9 @@ function updateSelectedSignatureFromControls(){
   s.baseW=s.baseW||260;s.baseH=s.baseH||85;
   const scale=Number($("signatureScale").value)/100;
   s.w=s.baseW*scale;s.h=s.baseH*scale;s.rotation=Number($("signatureRotation").value);
-  renderHandSignatures();
+  const node=$("handSignatures").querySelector(`[data-id="${s.id}"]`);
+  if(node)Object.assign(node.style,{width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});
+  $("signatureTransformHint").textContent=`Выделена: ${s.name}. Размер ${Math.round(scale*100)}%, поворот ${Math.round(s.rotation)}°.`;
 }
 function resetSelectedSignatureTransform(){
   const s=selectedHandSignature();if(!s)return;
@@ -330,7 +363,9 @@ function startSignatureDrag(e){
       s.rotation=startRotation+(angle-startAngle)*180/Math.PI;
     }
     Object.assign(d.style,{left:`${s.x}px`,top:`${s.y}px`,width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});
-    syncSignatureTransformControls();
+    if(!state.signatureControlFrame){
+      state.signatureControlFrame=requestAnimationFrame(()=>{state.signatureControlFrame=0;syncSignatureTransformControls();});
+    }
   };
   const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);renderHandSignatures();};
   window.addEventListener("pointermove",move);window.addEventListener("pointerup",up,{once:true});e.preventDefault();e.stopPropagation();
@@ -340,8 +375,9 @@ function startSignatureDrag(e){
 async function ensureSelectedFontLoaded(){
   const value=$("handFont").value;
   if(!value.startsWith("asset:"))return;
-  const family=fontFamilyForAsset({id:value.slice(6)});
-  try{await document.fonts.load(`32px "${family}"`);await document.fonts.ready;}catch(error){console.error("Не удалось подготовить шрифт к экспорту",error);}
+  const asset=state.assets.font.find(x=>x.id===value.slice(6));
+  const family=fontFamilyForAsset(asset||{id:value.slice(6)});
+  try{if(asset)await ensureFontAssetLoaded(asset);await document.fonts.load(`32px "${family}"`);await document.fonts.ready;}catch(error){console.error("Не удалось подготовить шрифт к экспорту",error);}
 }
 async function exportHandwritingPdf(save){
   const title=$("handDocumentTitle").value.trim();

@@ -145,7 +145,12 @@
 
       <section id="section-signatures" class="section asset-section">
         <div class="section-toolbar"><div><h2>Подписи</h2><p>Встроенная библиотека и собственные PNG.</p></div><label class="button primary file-button">Загрузить пачку PNG<input id="signatureUpload" type="file" multiple accept="image/png,image/webp"></label></div>
+        <div class="asset-filter-row">
+          <input id="signatureSearch" class="input" type="search" placeholder="Поиск подписи по номеру или названию">
+          <span id="signatureCount" class="hint"></span>
+        </div>
         <div id="signatureGrid" class="asset-grid"></div>
+        <button id="loadMoreSignatures" class="button signature-load-more" type="button">Показать ещё</button>
       </section>
 
       <section id="section-fonts" class="section asset-section">
