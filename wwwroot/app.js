@@ -1,1323 +1,146 @@
 "use strict";
 
+const $ = id => document.getElementById(id);
 const state = {
-    templates: [],
-    current: null,
-    user: null,
-    workspaceLoaded: false,
-    dirty: false,
-    fillTemplateDirty: false,
-    mode: "editor",
-    fillValues: new Map(),
-    savedRange: null,
-    passwordChangeRequired: false
+  user: null, section: "templates", templates: [], currentTemplate: null, templateMode: "editor",
+  assets: { signature: [], font: [], background: [] }, builtInSignatures: [], gallery: [],
+  hand: { x:105,y:55,w:620,h:850,rotation:0,skewX:0,skewY:0,drag:null,signatures:[],selectedSignature:null }
 };
-
-const elements = {
-    appShell: document.getElementById("appShell"),
-    loginOverlay: document.getElementById("loginOverlay"),
-    loginForm: document.getElementById("loginForm"),
-    loginUsername: document.getElementById("loginUsername"),
-    loginPassword: document.getElementById("loginPassword"),
-    loginRemember: document.getElementById("loginRemember"),
-    loginButton: document.getElementById("loginButton"),
-    loginError: document.getElementById("loginError"),
-    passwordOverlay: document.getElementById("passwordOverlay"),
-    passwordForm: document.getElementById("passwordForm"),
-    passwordDialogHint: document.getElementById("passwordDialogHint"),
-    currentPassword: document.getElementById("currentPassword"),
-    newPassword: document.getElementById("newPassword"),
-    confirmPassword: document.getElementById("confirmPassword"),
-    passwordError: document.getElementById("passwordError"),
-    closePasswordButton: document.getElementById("closePasswordButton"),
-    changePasswordButton: document.getElementById("changePasswordButton"),
-    logoutButton: document.getElementById("logoutButton"),
-    currentUser: document.getElementById("currentUser"),
-    templateList: document.getElementById("templateList"),
-    templateSearch: document.getElementById("templateSearch"),
-    templateName: document.getElementById("templateName"),
-    editor: document.getElementById("editor"),
-    fillDocument: document.getElementById("fillDocument"),
-    saveButton: document.getElementById("saveButton"),
-    saveStatus: document.getElementById("saveStatus"),
-    newTemplateButton: document.getElementById("newTemplateButton"),
-    duplicateButton: document.getElementById("duplicateButton"),
-    deleteButton: document.getElementById("deleteButton"),
-    insertFieldButton: document.getElementById("insertFieldButton"),
-    convertFieldsButton: document.getElementById("convertFieldsButton"),
-    editorTab: document.getElementById("editorTab"),
-    fillTab: document.getElementById("fillTab"),
-    editorView: document.getElementById("editorView"),
-    fillView: document.getElementById("fillView"),
-    resetFillButton: document.getElementById("resetFillButton"),
-    saveFillTemplateButton: document.getElementById("saveFillTemplateButton"),
-    wordButton: document.getElementById("wordButton"),
-    printButton: document.getElementById("printButton"),
-    fieldCount: document.getElementById("fieldCount"),
-    fillEditStatus: document.getElementById("fillEditStatus"),
-    blockFormat: document.getElementById("blockFormat"),
-    fontSize: document.getElementById("fontSize"),
-    textColor: document.getElementById("textColor"),
-    toast: document.getElementById("toast")
+const sectionMeta = {
+  templates:["Набивалка шаблонов","Создание, заполнение и экспорт документов."],
+  handwriting:["Рукописный текст","Рукописный документ на выбранном фоне."],
+  signatures:["Подписи","Встроенная библиотека и собственные файлы."],
+  fonts:["Шрифты","Шрифты для рукописных документов."],
+  backgrounds:["Фоны","Бумага, бланки и фотографии листов."],
+  gallery:["Галерея документов","Сохранённые PDF и заполненные шаблоны."]
 };
-
-const allowedTags = new Set([
-    "P", "DIV", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE",
-    "UL", "OL", "LI", "H1", "H2", "H3", "BLOCKQUOTE", "SPAN", "FONT",
-    "TABLE", "THEAD", "TBODY", "TR", "TD", "TH", "HR", "SUB", "SUP"
-]);
-
-const allowedStyles = new Set([
-    "color", "background-color", "font-size", "font-family", "font-weight",
-    "font-style", "text-decoration", "text-align", "margin-left", "padding-left",
-    "line-height", "white-space", "width"
-]);
-
-const sampleContent = `
-<p style="text-align: center;"><strong>ЗАЯВЛЕНИЕ</strong></p>
-<p><br></p>
-<p>Я, ________________________________, прошу предоставить мне ________________________________.</p>
-<p>Дата составления: __________ . __________ . 2026 год</p>`;
-
+const penPresets = {
+  "ball-light":{color:"#4677c8",opacity:.88,shadow:".25px .2px rgba(45,91,164,.18)",weight:400},
+  "ball-dark":{color:"#172f8e",opacity:.95,shadow:".35px .2px rgba(10,25,92,.22)",weight:430},
+  "ball-weak":{color:"#4269b2",opacity:.62,shadow:"1px 0 rgba(60,96,165,.08)",weight:350},
+  "ball-bright":{color:"#174dcc",opacity:.99,shadow:".35px .2px rgba(16,62,173,.25)",weight:500},
+  "ball-black":{color:"#17191e",opacity:.92,shadow:".25px .15px rgba(0,0,0,.2)",weight:420},
+  "gel-blue":{color:"#123ac8",opacity:1,shadow:".55px .35px rgba(12,45,160,.32)",weight:550},
+  "cap-blue":{color:"#203e98",opacity:.97,shadow:"none",weight:600},
+  "cap-black":{color:"#111318",opacity:.98,shadow:"none",weight:600}
+};
 let toastTimer;
 
-initialize();
-
-async function initialize() {
-    wireEvents();
-    document.execCommand("styleWithCSS", false, true);
-
-    try {
-        const response = await fetch("api/auth/me", { credentials: "same-origin" });
-        if (!response.ok) {
-            showLogin();
-            return;
-        }
-
-        const user = await response.json();
-        await completeAuthentication(user);
-    } catch {
-        showLogin("Не удалось подключиться к серверу.");
-    }
-}
-
-function wireEvents() {
-    elements.loginForm.addEventListener("submit", login);
-    elements.passwordForm.addEventListener("submit", changePassword);
-    elements.closePasswordButton.addEventListener("click", closePasswordDialog);
-    elements.changePasswordButton.addEventListener("click", () => openPasswordDialog(false));
-    elements.logoutButton.addEventListener("click", logout);
-
-    elements.newTemplateButton.addEventListener("click", () => createDraft(true));
-    elements.saveButton.addEventListener("click", () => {
-        if (state.mode === "fill") {
-            saveTemplateFromFill();
-        } else {
-            saveCurrent();
-        }
-    });
-    elements.duplicateButton.addEventListener("click", duplicateCurrent);
-    elements.deleteButton.addEventListener("click", deleteCurrent);
-    elements.insertFieldButton.addEventListener("mousedown", event => event.preventDefault());
-    elements.insertFieldButton.addEventListener("click", insertFieldAtCaret);
-    elements.convertFieldsButton.addEventListener("mousedown", event => event.preventDefault());
-    elements.convertFieldsButton.addEventListener("click", () => {
-        const count = convertUnderscoresToFields(elements.editor);
-        if (count > 0) {
-            markDirty();
-            showToast(`Создано полей: ${count}`);
-        } else {
-            showToast("Прочерки из трёх и более символов не найдены.");
-        }
-    });
-
-    elements.editorTab.addEventListener("click", () => setMode("editor"));
-    elements.fillTab.addEventListener("click", () => setMode("fill"));
-    elements.resetFillButton.addEventListener("click", resetFillFields);
-    elements.saveFillTemplateButton.addEventListener("click", saveTemplateFromFill);
-    elements.wordButton.addEventListener("click", exportWordDocument);
-    elements.printButton.addEventListener("click", printFilledDocument);
-    elements.templateSearch.addEventListener("input", renderTemplateList);
-
-    elements.templateName.addEventListener("input", markDirty);
-    elements.editor.addEventListener("input", markDirty);
-    elements.editor.addEventListener("paste", handlePaste);
-    elements.fillDocument.addEventListener("input", handleFillInput);
-    elements.fillDocument.addEventListener("paste", handleFillPaste);
-    elements.fillDocument.addEventListener("keydown", handleFillKeydown);
-
-    document.querySelectorAll("[data-command]").forEach(button => {
-        button.addEventListener("mousedown", event => event.preventDefault());
-        button.addEventListener("click", () => executeEditorCommand(button.dataset.command));
-    });
-
-    elements.blockFormat.addEventListener("change", () => {
-        executeEditorCommand("formatBlock", elements.blockFormat.value);
-        elements.blockFormat.value = "p";
-    });
-
-    elements.fontSize.addEventListener("change", () => {
-        executeEditorCommand("fontSize", elements.fontSize.value);
-    });
-
-    elements.textColor.addEventListener("input", () => {
-        executeEditorCommand("foreColor", elements.textColor.value);
-    });
-
-    document.addEventListener("selectionchange", saveEditorSelection);
-    document.addEventListener("keydown", event => {
-        const saveShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
-        if (saveShortcut && state.user) {
-            event.preventDefault();
-            if (state.mode === "fill") {
-                saveTemplateFromFill();
-            } else {
-                saveCurrent();
-            }
-        }
-    });
-
-    window.addEventListener("beforeunload", event => {
-        if (!state.dirty && !state.fillTemplateDirty) {
-            return;
-        }
-
-        event.preventDefault();
-        event.returnValue = "";
-    });
-}
-
-async function login(event) {
-    event.preventDefault();
-    elements.loginError.textContent = "";
-    elements.loginButton.disabled = true;
-    elements.loginButton.textContent = "Вход…";
-
-    try {
-        const response = await fetch("api/auth/login", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                username: elements.loginUsername.value.trim(),
-                password: elements.loginPassword.value,
-                rememberMe: elements.loginRemember.checked
-            })
-        });
-
-        const data = await readResponseData(response);
-        if (!response.ok) {
-            throw new Error(data?.error || `Ошибка ${response.status}`);
-        }
-
-        elements.loginPassword.value = "";
-        await completeAuthentication(data);
-    } catch (error) {
-        elements.loginError.textContent = error.message;
-    } finally {
-        elements.loginButton.disabled = false;
-        elements.loginButton.textContent = "Войти";
-    }
-}
-
-async function completeAuthentication(user) {
-    state.user = user;
-    state.passwordChangeRequired = Boolean(user.mustChangePassword);
-    elements.currentUser.textContent = user.username;
-    elements.loginOverlay.classList.add("hidden");
-
-    if (state.passwordChangeRequired) {
-        elements.appShell.classList.add("hidden");
-        openPasswordDialog(true);
-        return;
-    }
-
-    elements.passwordOverlay.classList.add("hidden");
-    elements.appShell.classList.remove("hidden");
-    if (!state.workspaceLoaded) {
-        await loadWorkspace();
-    }
-}
-
-function showLogin(message = "") {
-    state.user = null;
-    state.workspaceLoaded = false;
-    state.templates = [];
-    state.current = null;
-    state.fillValues.clear();
-    state.dirty = false;
-    state.fillTemplateDirty = false;
-    elements.appShell.classList.add("hidden");
-    elements.passwordOverlay.classList.add("hidden");
-    elements.loginOverlay.classList.remove("hidden");
-    elements.loginError.textContent = message;
-    setTimeout(() => elements.loginUsername.focus(), 0);
-}
-
-async function logout() {
-    if (!canDiscardChanges()) {
-        return;
-    }
-
-    try {
-        await fetch("api/auth/logout", {
-            method: "POST",
-            credentials: "same-origin"
-        });
-    } finally {
-        showLogin();
-    }
-}
-
-function openPasswordDialog(required) {
-    state.passwordChangeRequired = required;
-    elements.passwordForm.reset();
-    elements.passwordError.textContent = "";
-    elements.passwordDialogHint.textContent = required
-        ? "Это первоначальный пароль. Перед началом работы задайте новый."
-        : "Укажите текущий и новый пароль.";
-    elements.closePasswordButton.classList.toggle("hidden", required);
-    elements.passwordOverlay.classList.remove("hidden");
-    setTimeout(() => elements.currentPassword.focus(), 0);
-}
-
-function closePasswordDialog() {
-    if (state.passwordChangeRequired) {
-        return;
-    }
-    elements.passwordOverlay.classList.add("hidden");
-}
-
-async function changePassword(event) {
-    event.preventDefault();
-    elements.passwordError.textContent = "";
-
-    const currentPassword = elements.currentPassword.value;
-    const newPassword = elements.newPassword.value;
-    const confirmPassword = elements.confirmPassword.value;
-
-    if (newPassword.length < 8) {
-        elements.passwordError.textContent = "Новый пароль должен содержать не менее 8 символов.";
-        return;
-    }
-
-    if (newPassword !== confirmPassword) {
-        elements.passwordError.textContent = "Новые пароли не совпадают.";
-        return;
-    }
-
-    try {
-        const user = await api("api/auth/change-password", {
-            method: "POST",
-            body: { currentPassword, newPassword }
-        });
-        state.passwordChangeRequired = false;
-        elements.passwordOverlay.classList.add("hidden");
-        await completeAuthentication(user);
-        showToast("Пароль изменён.");
-    } catch (error) {
-        elements.passwordError.textContent = error.message;
-    }
-}
-
-async function loadWorkspace() {
-    await loadTemplates();
-    state.workspaceLoaded = true;
-
-    if (state.templates.length > 0) {
-        await openTemplate(state.templates[0].id, true);
-    } else {
-        createDraft();
-    }
-}
-
-async function loadTemplates() {
-    try {
-        state.templates = await api("api/templates");
-        renderTemplateList();
-    } catch (error) {
-        showToast(error.message, true);
-    }
-}
-
-function renderTemplateList() {
-    const query = elements.templateSearch.value.trim().toLocaleLowerCase("ru");
-    const templates = state.templates.filter(template =>
-        template.name.toLocaleLowerCase("ru").includes(query));
-
-    elements.templateList.replaceChildren();
-
-    if (templates.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "list-empty";
-        empty.textContent = query ? "Ничего не найдено" : "Сохранённых шаблонов пока нет";
-        elements.templateList.append(empty);
-        return;
-    }
-
-    for (const template of templates) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "template-item";
-        if (state.current?.id === template.id) {
-            button.classList.add("active");
-        }
-
-        const title = document.createElement("strong");
-        title.textContent = template.name;
-
-        const date = document.createElement("span");
-        date.textContent = `Изменён ${formatDate(template.updatedAt)}`;
-
-        button.append(title, date);
-        button.addEventListener("click", () => openTemplate(template.id));
-        elements.templateList.append(button);
-    }
-}
-
-function createDraft(confirmDiscard = false) {
-    if (confirmDiscard && !canDiscardChanges()) {
-        return;
-    }
-
-    state.current = {
-        id: null,
-        name: "Новый шаблон",
-        contentHtml: sampleContent,
-        createdAt: null,
-        updatedAt: null
-    };
-
-    state.fillValues.clear();
-    state.fillTemplateDirty = false;
-    elements.templateName.value = state.current.name;
-    elements.editor.innerHTML = state.current.contentHtml;
-    setDirty(true);
-    setMode("editor");
-    renderTemplateList();
-    setTimeout(() => {
-        elements.templateName.focus();
-        elements.templateName.select();
-    }, 0);
-}
-
-async function openTemplate(id, skipDiscardCheck = false) {
-    if (state.current?.id === id) {
-        return;
-    }
-
-    if (!skipDiscardCheck && !canDiscardChanges()) {
-        return;
-    }
-
-    try {
-        const template = await api(`api/templates/${id}`);
-        state.current = template;
-        state.fillValues.clear();
-        state.fillTemplateDirty = false;
-        elements.templateName.value = template.name;
-        elements.editor.innerHTML = sanitizeHtml(template.contentHtml || "");
-        setDirty(false);
-        setMode("editor");
-        renderTemplateList();
-    } catch (error) {
-        showToast(error.message, true);
-    }
-}
-
-async function saveCurrent(options = {}) {
-    if (!state.current) {
-        return null;
-    }
-
-    const name = elements.templateName.value.trim();
-    if (!name) {
-        elements.templateName.focus();
-        showToast("Укажите название шаблона.", true);
-        return null;
-    }
-
-    let contentHtml = options.contentHtml;
-    if (contentHtml === undefined) {
-        convertUnderscoresToFields(elements.editor);
-        contentHtml = sanitizeHtml(elements.editor.innerHTML);
-        elements.editor.innerHTML = contentHtml;
-    }
-
-    const payload = { name, contentHtml };
-    const isNew = !state.current.id;
-    const url = isNew ? "api/templates" : `api/templates/${state.current.id}`;
-    const method = isNew ? "POST" : "PUT";
-
-    setSaveStatus("Сохранение…");
-
-    try {
-        const saved = await api(url, { method, body: payload });
-        state.current = saved;
-        elements.templateName.value = saved.name;
-        elements.editor.innerHTML = sanitizeHtml(saved.contentHtml || "");
-        setDirty(false);
-        await loadTemplates();
-        renderTemplateList();
-        showToast(isNew ? "Шаблон создан." : "Изменения сохранены.");
-        return saved;
-    } catch (error) {
-        setSaveStatus("Ошибка");
-        showToast(error.message, true);
-        return null;
-    }
-}
-
-async function saveTemplateFromFill() {
-    if (!state.current) {
-        return;
-    }
-
-    captureFillValues();
-    const templateHtml = extractTemplateHtmlFromFill();
-    const saved = await saveCurrent({ contentHtml: templateHtml });
-    if (!saved) {
-        return;
-    }
-
-    state.fillTemplateDirty = false;
-    buildFillDocument();
-    updateFillEditStatus();
-}
-
-async function duplicateCurrent() {
-    if (!state.current) {
-        return;
-    }
-
-    let contentHtml;
-    if (state.mode === "fill") {
-        contentHtml = extractTemplateHtmlFromFill();
-    } else {
-        convertUnderscoresToFields(elements.editor);
-        contentHtml = sanitizeHtml(elements.editor.innerHTML);
-    }
-
-    const payload = {
-        name: `${elements.templateName.value.trim() || "Шаблон"} — копия`,
-        contentHtml
-    };
-
-    try {
-        const copy = await api("api/templates", { method: "POST", body: payload });
-        state.current = null;
-        setDirty(false);
-        state.fillTemplateDirty = false;
-        await loadTemplates();
-        await openTemplate(copy.id, true);
-        showToast("Копия шаблона создана.");
-    } catch (error) {
-        showToast(error.message, true);
-    }
-}
-
-async function deleteCurrent() {
-    if (!state.current?.id) {
-        createDraft(false);
-        return;
-    }
-
-    const confirmed = window.confirm(`Удалить шаблон «${state.current.name}»?`);
-    if (!confirmed) {
-        return;
-    }
-
-    try {
-        await api(`api/templates/${state.current.id}`, { method: "DELETE" });
-        state.current = null;
-        setDirty(false);
-        state.fillTemplateDirty = false;
-        await loadTemplates();
-
-        if (state.templates.length > 0) {
-            await openTemplate(state.templates[0].id, true);
-        } else {
-            createDraft(false);
-        }
-
-        showToast("Шаблон удалён.");
-    } catch (error) {
-        showToast(error.message, true);
-    }
-}
-
-function setMode(mode) {
-    if (mode === state.mode) {
-        return;
-    }
-
-    if (mode === "editor" && state.fillTemplateDirty) {
-        const confirmed = window.confirm(
-            "В режиме заполнения изменён текст шаблона. Перейти в редактор без сохранения этих правок?");
-        if (!confirmed) {
-            return;
-        }
-        state.fillTemplateDirty = false;
-    }
-
-    state.mode = mode;
-    const editorMode = mode === "editor";
-
-    elements.editorTab.classList.toggle("active", editorMode);
-    elements.fillTab.classList.toggle("active", !editorMode);
-    elements.editorTab.setAttribute("aria-selected", String(editorMode));
-    elements.fillTab.setAttribute("aria-selected", String(!editorMode));
-    elements.editorView.classList.toggle("hidden", !editorMode);
-    elements.fillView.classList.toggle("hidden", editorMode);
-
-    if (!editorMode) {
-        const converted = convertUnderscoresToFields(elements.editor);
-        if (converted > 0) {
-            markDirty();
-        }
-        buildFillDocument();
-    }
-}
-
-function buildFillDocument() {
-    const container = document.createElement("div");
-    container.innerHTML = sanitizeHtml(elements.editor.innerHTML);
-    convertUnderscoresToFields(container);
-
-    const placeholders = [...container.querySelectorAll(".placeholder-token")];
-    for (const placeholder of placeholders) {
-        const fieldId = placeholder.dataset.fieldId || createId();
-        const field = document.createElement("span");
-        field.className = "fill-field";
-        field.contentEditable = "true";
-        field.spellcheck = false;
-        field.dataset.fieldId = fieldId;
-        field.setAttribute("role", "textbox");
-        field.setAttribute("aria-label", "Заполняемое поле");
-        field.textContent = state.fillValues.get(fieldId) || "";
-        placeholder.replaceWith(field);
-    }
-
-    elements.fillDocument.innerHTML = container.innerHTML;
-    state.fillTemplateDirty = false;
-    updateFieldCount();
-    updateFillEditStatus();
-}
-
-function handleFillInput(event) {
-    const field = getElementTarget(event)?.closest(".fill-field");
-    if (field && elements.fillDocument.contains(field)) {
-        const normalized = normalizeFieldInput(field.textContent || "");
-        if (field.textContent !== normalized) {
-            field.textContent = normalized;
-            placeCaretAtEnd(field);
-        }
-        state.fillValues.set(field.dataset.fieldId, normalized);
-    }
-
-    window.requestAnimationFrame(() => {
-        state.fillTemplateDirty = normalizeComparableHtml(extractTemplateHtmlFromFill()) !==
-            normalizeComparableHtml(sanitizeHtml(elements.editor.innerHTML));
-        updateFieldCount();
-        updateFillEditStatus();
-    });
-}
-
-function handleFillPaste(event) {
-    const field = getElementTarget(event)?.closest(".fill-field");
-    if (!field) {
-        return;
-    }
-
-    event.preventDefault();
-    const text = normalizeFieldInput(event.clipboardData?.getData("text/plain") || "");
-    document.execCommand("insertText", false, text);
-}
-
-function handleFillKeydown(event) {
-    const field = getElementTarget(event)?.closest(".fill-field");
-    if (!field) {
-        return;
-    }
-
-    if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault();
-        focusNextFillField(field, event.shiftKey ? -1 : 1);
-    }
-}
-
-function focusNextFillField(current, direction) {
-    const fields = [...elements.fillDocument.querySelectorAll(".fill-field")];
-    const currentIndex = fields.indexOf(current);
-    if (currentIndex < 0 || fields.length === 0) {
-        return;
-    }
-
-    const nextIndex = (currentIndex + direction + fields.length) % fields.length;
-    fields[nextIndex].focus();
-    placeCaretAtEnd(fields[nextIndex]);
-}
-
-function placeCaretAtEnd(element) {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-}
-
-function captureFillValues() {
-    elements.fillDocument.querySelectorAll(".fill-field").forEach(field => {
-        const value = getFinalFieldValue(field.textContent || "");
-        field.textContent = value;
-        state.fillValues.set(field.dataset.fieldId, value);
-    });
-}
-
-function extractTemplateHtmlFromFill() {
-    const clone = elements.fillDocument.cloneNode(true);
-    clone.querySelectorAll(".fill-field").forEach(field => {
-        const placeholder = createPlaceholder(field.dataset.fieldId || createId());
-        field.replaceWith(placeholder);
-    });
-    return sanitizeHtml(clone.innerHTML);
-}
-
-function normalizeFieldInput(value) {
-    return value.replace(/[\r\n\t]+/g, " ");
-}
-
-function getFinalFieldValue(value) {
-    return normalizeFieldInput(value).trim();
-}
-
-function resetFillFields() {
-    state.fillValues.clear();
-    elements.fillDocument.querySelectorAll(".fill-field").forEach(field => {
-        field.textContent = "";
-    });
-    showToast("Поля очищены.");
-}
-
-function updateFieldCount() {
-    const count = elements.fillDocument.querySelectorAll(".fill-field").length;
-    elements.fieldCount.textContent = count === 0 ? "Поля не найдены" : `Полей: ${count}`;
-}
-
-function updateFillEditStatus() {
-    elements.fillEditStatus.textContent = state.fillTemplateDirty
-        ? "Текст шаблона изменён — сохраните правки"
-        : "Текст шаблона не изменён";
-    elements.fillEditStatus.classList.toggle("changed", state.fillTemplateDirty);
-    elements.saveFillTemplateButton.disabled = !state.fillTemplateDirty && Boolean(state.current?.id);
-}
-
-function printFilledDocument() {
-    captureFillValues();
-    const clone = createFinalDocumentClone();
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-        showToast("Браузер заблокировал окно печати.", true);
-        return;
-    }
-
-    printWindow.opener = null;
-    const title = escapeHtml(elements.templateName.value.trim() || "Документ");
-    printWindow.document.open();
-    printWindow.document.write(`<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<title>${title}</title>
-<style>
-@page { size: A4; margin: 20mm; }
-* { box-sizing: border-box; }
-body { margin: 0; color: #111; font-family: "PT Astra Serif", "Times New Roman", serif; font-size: 12pt; line-height: 1.15; }
-p { margin: 0 0 10px; }
-h1, h2, h3 { margin: 0 0 14px; }
-table { width: 100%; border-collapse: collapse; }
-td, th { padding: 6px; border: 1px solid #888; }
-.print-value { display: inline; margin: 0; padding: 0; border: 0; background: transparent; font: inherit; white-space: pre-wrap; }
-</style>
-</head>
-<body>${clone.innerHTML}</body>
-</html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 150);
-}
-
-async function exportWordDocument() {
-    captureFillValues();
-    elements.wordButton.disabled = true;
-    elements.wordButton.textContent = "Экспорт…";
-
-    try {
-        const payload = {
-            fileName: elements.templateName.value.trim() || "Документ",
-            blocks: serializeDocumentForWord(elements.fillDocument)
-        };
-
-        const response = await fetch("api/export/word", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.status === 401) {
-            showLogin("Сессия истекла. Войдите снова.");
-            return;
-        }
-
-        if (!response.ok) {
-            const data = await readResponseData(response);
-            throw new Error(data?.error || `Ошибка ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${sanitizeDownloadName(payload.fileName)}.docx`;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        showToast("Word-документ сформирован.");
-    } catch (error) {
-        showToast(error.message, true);
-    } finally {
-        elements.wordButton.disabled = false;
-        elements.wordButton.textContent = "Экспорт в Word";
-    }
-}
-
-function createFinalDocumentClone() {
-    const clone = elements.fillDocument.cloneNode(true);
-    clone.removeAttribute("contenteditable");
-    clone.querySelectorAll(".fill-field").forEach(field => {
-        const value = getFinalFieldValue(field.textContent || "");
-        const span = document.createElement("span");
-        span.className = "print-value";
-        span.textContent = value;
-        field.replaceWith(span);
-    });
-    return clone;
-}
-
-function serializeDocumentForWord(root) {
-    const blocks = [];
-
-    for (const child of [...root.childNodes]) {
-        if (child.nodeType === Node.TEXT_NODE) {
-            if ((child.nodeValue || "").trim()) {
-                blocks.push({
-                    kind: "paragraph",
-                    paragraph: createWordParagraph(root, [createWordRun(child, root)])
-                });
-            }
-            continue;
-        }
-
-        if (child.nodeType !== Node.ELEMENT_NODE) {
-            continue;
-        }
-
-        const tag = child.tagName.toUpperCase();
-        if (tag === "TABLE") {
-            blocks.push(serializeTable(child));
-        } else if (tag === "UL" || tag === "OL") {
-            const items = [...child.children].filter(item => item.tagName === "LI");
-            items.forEach((item, index) => {
-                const prefix = tag === "UL" ? "• " : `${index + 1}. `;
-                const runs = [plainWordRun(prefix), ...collectWordRuns(item)];
-                blocks.push({ kind: "paragraph", paragraph: createWordParagraph(item, runs) });
-            });
-        } else if (tag === "HR") {
-            blocks.push({
-                kind: "paragraph",
-                paragraph: createWordParagraph(child, [plainWordRun("────────────────────────")])
-            });
-        } else {
-            blocks.push({
-                kind: "paragraph",
-                paragraph: createWordParagraph(child, collectWordRuns(child))
-            });
-        }
-    }
-
-    return blocks.length > 0
-        ? blocks
-        : [{ kind: "paragraph", paragraph: createWordParagraph(root, []) }];
-}
-
-function serializeTable(table) {
-    const rows = [...table.querySelectorAll("tr")].map(row =>
-        [...row.children]
-            .filter(cell => cell.tagName === "TD" || cell.tagName === "TH")
-            .map(cell => createWordParagraph(cell, collectWordRuns(cell))));
-
-    return { kind: "table", rows };
-}
-
-function createWordParagraph(element, runs) {
-    const style = getComputedStyle(element);
-    const headingLevel = /^H[1-3]$/.test(element.tagName || "")
-        ? Number(element.tagName.substring(1))
-        : null;
-
-    return {
-        alignment: style.textAlign || "left",
-        headingLevel,
-        runs
-    };
-}
-
-function collectWordRuns(root) {
-    const runs = [];
-
-    function visit(node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            const text = node.nodeValue || "";
-            if (text) {
-                runs.push(createWordRun(node, node.parentElement || root));
-            }
-            return;
-        }
-
-        if (node.nodeType !== Node.ELEMENT_NODE) {
-            return;
-        }
-
-        if (node.tagName === "BR") {
-            runs.push({ ...plainWordRun(""), break: true });
-            return;
-        }
-
-        for (const child of [...node.childNodes]) {
-            visit(child);
-        }
-    }
-
-    for (const child of [...root.childNodes]) {
-        visit(child);
-    }
-
-    return mergeAdjacentRuns(runs);
-}
-
-function createWordRun(textNode, styleElement) {
-    const style = getComputedStyle(styleElement);
-    const weight = Number.parseInt(style.fontWeight, 10);
-    return {
-        text: textNode.nodeValue || "",
-        bold: style.fontWeight === "bold" || Number.isFinite(weight) && weight >= 600,
-        italic: style.fontStyle === "italic" || style.fontStyle === "oblique",
-        underline: style.textDecorationLine.includes("underline"),
-        strike: style.textDecorationLine.includes("line-through"),
-        fontSize: Math.max(8, Math.round(Number.parseFloat(style.fontSize || "16") * 0.75)),
-        color: cssColorToHex(style.color),
-        break: false
-    };
-}
-
-function plainWordRun(text) {
-    return {
-        text,
-        bold: false,
-        italic: false,
-        underline: false,
-        strike: false,
-        fontSize: 12,
-        color: "20242B",
-        break: false
-    };
-}
-
-function mergeAdjacentRuns(runs) {
-    const result = [];
-    for (const run of runs) {
-        const previous = result.at(-1);
-        const sameFormat = previous && !previous.break && !run.break &&
-            previous.bold === run.bold && previous.italic === run.italic &&
-            previous.underline === run.underline && previous.strike === run.strike &&
-            previous.fontSize === run.fontSize && previous.color === run.color;
-
-        if (sameFormat) {
-            previous.text += run.text;
-        } else {
-            result.push({ ...run });
-        }
-    }
-    return result;
-}
-
-function cssColorToHex(color) {
-    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-    if (!match) {
-        return "20242B";
-    }
-    return [match[1], match[2], match[3]]
-        .map(value => Number(value).toString(16).padStart(2, "0"))
-        .join("")
-        .toUpperCase();
-}
-
-function convertUnderscoresToFields(root) {
-    const textNodes = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let node;
-
-    while ((node = walker.nextNode())) {
-        if (!node.parentElement?.closest(".placeholder-token") && /_{3,}/.test(node.nodeValue || "")) {
-            textNodes.push(node);
-        }
-    }
-
-    let created = 0;
-
-    for (const textNode of textNodes) {
-        const text = textNode.nodeValue || "";
-        const matches = [...text.matchAll(/_{3,}/g)];
-        if (matches.length === 0 || !textNode.parentNode) {
-            continue;
-        }
-
-        const blockText = getContainingBlockText(textNode);
-        const preserveAsManualDate = isManualDateLine(blockText);
-        const fragment = document.createDocumentFragment();
-        let cursor = 0;
-
-        for (const match of matches) {
-            const index = match.index ?? 0;
-            fragment.append(document.createTextNode(text.slice(cursor, index)));
-
-            if (preserveAsManualDate) {
-                fragment.append(document.createTextNode(match[0]));
-            } else {
-                fragment.append(createPlaceholder());
-                created += 1;
-            }
-
-            cursor = index + match[0].length;
-        }
-
-        fragment.append(document.createTextNode(text.slice(cursor)));
-        textNode.parentNode.replaceChild(fragment, textNode);
-    }
-
-    return created;
-}
-
-function getContainingBlockText(textNode) {
-    const block = textNode.parentElement?.closest("p, div, li, td, th, blockquote") ||
-        textNode.parentElement;
-    return (block?.textContent || textNode.nodeValue || "").replace(/\u00a0/g, " ");
-}
-
-function isManualDateLine(text) {
-    const normalized = text.replace(/\s+/g, " ").trim();
-    const hasYearWord = /(?:19|20)\d{2}\s*год(?:\s|$|[.,])/i.test(normalized);
-    const hasBlankDatePattern = /_{3,}\s*[./]\s*_{3,}/.test(normalized);
-    return hasYearWord && hasBlankDatePattern;
-}
-
-function createPlaceholder(fieldId = createId()) {
-    const placeholder = document.createElement("span");
-    placeholder.className = "placeholder-token";
-    placeholder.contentEditable = "false";
-    placeholder.dataset.fieldId = fieldId;
-    placeholder.title = "Заполняемое поле";
-    placeholder.setAttribute("aria-label", "Заполняемое поле");
-    return placeholder;
-}
-
-function insertFieldAtCaret() {
-    restoreEditorSelection();
-    elements.editor.focus();
-
-    const selection = window.getSelection();
-    let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
-
-    if (!range || !elements.editor.contains(range.commonAncestorContainer)) {
-        range = document.createRange();
-        range.selectNodeContents(elements.editor);
-        range.collapse(false);
-    }
-
-    range.deleteContents();
-    const placeholder = createPlaceholder();
-    range.insertNode(placeholder);
-    range.setStartAfter(placeholder);
-    range.collapse(true);
-
-    selection.removeAllRanges();
-    selection.addRange(range);
-    state.savedRange = range.cloneRange();
-    markDirty();
-}
-
-function handlePaste(event) {
-    event.preventDefault();
-
-    const html = event.clipboardData?.getData("text/html");
-    const text = event.clipboardData?.getData("text/plain") || "";
-
-    restoreEditorSelection();
-
-    if (html) {
-        document.execCommand("insertHTML", false, sanitizeHtml(html));
-    } else {
-        const safeText = escapeHtml(text).replace(/\r?\n/g, "<br>");
-        document.execCommand("insertHTML", false, safeText);
-    }
-
-    markDirty();
-}
-
-function executeEditorCommand(command, value = null) {
-    restoreEditorSelection();
-    elements.editor.focus();
-    document.execCommand(command, false, value);
-    saveEditorSelection();
-    markDirty();
-}
-
-function saveEditorSelection() {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-        return;
-    }
-
-    const range = selection.getRangeAt(0);
-    const commonAncestor = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-        ? range.commonAncestorContainer.parentElement
-        : range.commonAncestorContainer;
-
-    if (commonAncestor && elements.editor.contains(commonAncestor)) {
-        state.savedRange = range.cloneRange();
-    }
-}
-
-function restoreEditorSelection() {
-    if (!state.savedRange) {
-        elements.editor.focus();
-        return;
-    }
-
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(state.savedRange);
-}
-
-function sanitizeHtml(html) {
-    const source = document.createElement("template");
-    source.innerHTML = html || "";
-
-    const target = document.createElement("div");
-    for (const child of [...source.content.childNodes]) {
-        const cleaned = cleanNode(child);
-        if (cleaned) {
-            target.append(cleaned);
-        }
-    }
-
-    return target.innerHTML;
-}
-
-function cleanNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-        return document.createTextNode(node.nodeValue || "");
-    }
-
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-        return null;
-    }
-
-    const tagName = node.tagName.toUpperCase();
-
-    if (!allowedTags.has(tagName)) {
-        const fragment = document.createDocumentFragment();
-        for (const child of [...node.childNodes]) {
-            const cleanedChild = cleanNode(child);
-            if (cleanedChild) {
-                fragment.append(cleanedChild);
-            }
-        }
-        return fragment;
-    }
-
-    const cleanElement = document.createElement(tagName.toLowerCase());
-    const isPlaceholder = tagName === "SPAN" && node.classList.contains("placeholder-token");
-
-    if (isPlaceholder) {
-        cleanElement.className = "placeholder-token";
-        cleanElement.contentEditable = "false";
-        cleanElement.dataset.fieldId = node.dataset.fieldId || createId();
-        cleanElement.title = "Заполняемое поле";
-        cleanElement.setAttribute("aria-label", "Заполняемое поле");
-    }
-
-    const safeStyle = sanitizeStyle(node.getAttribute("style") || "");
-    if (safeStyle) {
-        cleanElement.setAttribute("style", safeStyle);
-    }
-
-    if (tagName === "FONT") {
-        for (const attribute of ["color", "face", "size"]) {
-            const value = node.getAttribute(attribute);
-            if (value && value.length < 100) {
-                cleanElement.setAttribute(attribute, value);
-            }
-        }
-    }
-
-    if (["TD", "TH"].includes(tagName)) {
-        for (const attribute of ["colspan", "rowspan"]) {
-            const value = node.getAttribute(attribute);
-            if (/^\d{1,2}$/.test(value || "")) {
-                cleanElement.setAttribute(attribute, value);
-            }
-        }
-    }
-
-    if (!isPlaceholder) {
-        for (const child of [...node.childNodes]) {
-            const cleanedChild = cleanNode(child);
-            if (cleanedChild) {
-                cleanElement.append(cleanedChild);
-            }
-        }
-    }
-
-    return cleanElement;
-}
-
-function sanitizeStyle(styleText) {
-    const parser = document.createElement("span");
-    parser.style.cssText = styleText;
-    const safeParts = [];
-
-    for (const property of [...parser.style]) {
-        if (!allowedStyles.has(property)) {
-            continue;
-        }
-
-        const value = parser.style.getPropertyValue(property).trim();
-        if (!value || /url\s*\(|expression\s*\(/i.test(value)) {
-            continue;
-        }
-
-        safeParts.push(`${property}: ${value}`);
-    }
-
-    return safeParts.join("; ");
-}
-
-function markDirty() {
-    setDirty(true);
-}
-
-function setDirty(value) {
-    state.dirty = value;
-    setSaveStatus(value ? "Не сохранено" : "Сохранено");
-}
-
-function setSaveStatus(text) {
-    elements.saveStatus.textContent = text;
-}
-
-function canDiscardChanges() {
-    return (!state.dirty && !state.fillTemplateDirty) ||
-        window.confirm("Есть несохранённые изменения. Продолжить без сохранения?");
-}
-
-async function api(url, options = {}) {
-    const request = {
-        method: options.method || "GET",
-        credentials: "same-origin",
-        headers: {}
-    };
-
-    if (options.body !== undefined) {
-        request.headers["Content-Type"] = "application/json";
-        request.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(url, request);
-
-    if (response.status === 401) {
-        showLogin("Сессия истекла. Войдите снова.");
-        throw new Error("Требуется повторный вход.");
-    }
-
-    if (!response.ok) {
-        const data = await readResponseData(response);
-        throw new Error(data?.error || data?.title || `Ошибка ${response.status}`);
-    }
-
-    if (response.status === 204) {
-        return null;
-    }
-
-    return response.json();
-}
-
-async function readResponseData(response) {
-    try {
-        return await response.json();
-    } catch {
-        return null;
-    }
-}
-
-function showToast(message, isError = false) {
-    clearTimeout(toastTimer);
-    elements.toast.textContent = message;
-    elements.toast.classList.toggle("error", isError);
-    elements.toast.classList.add("visible");
-    toastTimer = setTimeout(() => elements.toast.classList.remove("visible"), 2800);
-}
-
-function formatDate(value) {
-    return new Intl.DateTimeFormat("ru-RU", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-    }).format(new Date(value));
-}
-
-function createId() {
-    return globalThis.crypto?.randomUUID?.() ||
-        `field-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function normalizeComparableHtml(value) {
-    return value.replace(/>\s+</g, "><").trim();
-}
-
-function sanitizeDownloadName(value) {
-    const cleaned = String(value || "Документ")
-        .replace(/[\\/:*?"<>|]/g, "_")
-        .trim()
-        .replace(/\.+$/g, "");
-    return cleaned || "Документ";
-}
-
-function getElementTarget(event) {
-    return event.target instanceof Element ? event.target : event.target?.parentElement || null;
-}
+init();
+
+async function init(){
+  wire();
+  try{
+    const r=await fetch("api/auth/me",{credentials:"same-origin"});
+    if(!r.ok){ showLogin(); return; }
+    await authenticated(await r.json());
+  }catch{ showLogin("Не удалось подключиться к серверу."); }
+}
+
+function wire(){
+  $("loginForm").onsubmit=login; $("logoutButton").onclick=logout;
+  $("changePasswordButton").onclick=()=>$("passwordOverlay").classList.remove("hidden");
+  $("closePassword").onclick=()=>$("passwordOverlay").classList.add("hidden");
+  $("passwordForm").onsubmit=changePassword;
+  $("drawerToggle").onclick=openDrawer; $("drawerClose").onclick=closeDrawer; $("drawerBackdrop").onclick=closeDrawer;
+  document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>showSection(b.dataset.section));
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>showSection(b.dataset.go));
+
+  $("newTemplateButton").onclick=createTemplateDraft; $("templateSearch").oninput=renderTemplateList;
+  $("saveTemplateButton").onclick=saveTemplate; $("duplicateTemplateButton").onclick=duplicateTemplate; $("deleteTemplateButton").onclick=deleteTemplate;
+  $("insertFieldButton").onclick=insertTemplateField; $("convertFieldsButton").onclick=convertTemplateFields;
+  document.querySelectorAll("[data-command]").forEach(b=>b.onclick=()=>{document.execCommand(b.dataset.command,false);$("templateEditor").focus();});
+  document.querySelectorAll("[data-template-mode]").forEach(b=>b.onclick=()=>setTemplateMode(b.dataset.templateMode));
+  $("resetFieldsButton").onclick=()=>$("fillDocument").querySelectorAll(".fill-field").forEach(x=>x.textContent="");
+  $("saveFilledTemplateButton").onclick=saveTemplateFromFill; $("saveFilledToGalleryButton").onclick=saveFilledToGallery;
+  $("exportTemplateWordButton").onclick=exportTemplateWord; $("exportTemplatePdfButton").onclick=exportTemplatePdf;
+
+  ["handText","handFont","penPreset","handSize","handLine","handRotate","handSkewX","handSkewY","handOpacity"].forEach(id=>$(id).addEventListener("input",renderHandwriting));
+  $("handBackground").onchange=applyHandBackground; $("resetHandTransform").onclick=resetHandTransform;
+  $("exportHandPdf").onclick=()=>exportHandwritingPdf(false); $("saveHandPdf").onclick=()=>exportHandwritingPdf(true);
+  const box=$("handTextBox"); box.addEventListener("pointerdown",startHandTransform); window.addEventListener("pointermove",moveHandTransform); window.addEventListener("pointerup",endHandTransform);
+  $("handSignatures").addEventListener("pointerdown",startSignatureDrag);
+
+  $("signatureUpload").onchange=e=>uploadAssets("signature",e.target.files,e.target);
+  $("fontUpload").onchange=e=>uploadAssets("font",e.target.files,e.target);
+  $("backgroundUpload").onchange=e=>uploadAssets("background",e.target.files,e.target);
+  $("documentUpload").onchange=e=>uploadDocuments(e.target.files,e.target);
+}
+
+async function authenticated(user){
+  state.user=user; $("currentUser").textContent=user.username; $("loginOverlay").classList.add("hidden"); $("app").classList.remove("hidden");
+  await Promise.all([loadTemplates(),loadAssets(),loadBuiltInSignatures(),loadGallery()]);
+  createTemplateDraft(); renderHandwriting(); renderAllAssets();
+}
+function showLogin(message=""){ $("app").classList.add("hidden"); $("loginOverlay").classList.remove("hidden"); $("loginError").textContent=message; }
+async function login(e){e.preventDefault();try{const u=await api("api/auth/login",{method:"POST",body:{username:$("loginUsername").value.trim(),password:$("loginPassword").value,rememberMe:$("loginRemember").checked}});await authenticated(u);}catch(err){$("loginError").textContent=err.message;}}
+async function logout(){await fetch("api/auth/logout",{method:"POST",credentials:"same-origin"});location.reload();}
+async function changePassword(e){e.preventDefault();const a=$("newPassword").value,b=$("confirmPassword").value;if(a!==b){$("passwordError").textContent="Пароли не совпадают.";return;}try{await api("api/auth/change-password",{method:"POST",body:{currentPassword:$("currentPassword").value,newPassword:a}});$("passwordOverlay").classList.add("hidden");showToast("Пароль изменён");}catch(err){$("passwordError").textContent=err.message;}}
+
+function openDrawer(){ $("drawer").classList.add("open"); $("drawerBackdrop").classList.remove("hidden"); }
+function closeDrawer(){ $("drawer").classList.remove("open"); $("drawerBackdrop").classList.add("hidden"); }
+function showSection(name){state.section=name;document.querySelectorAll(".section").forEach(s=>s.classList.toggle("active",s.id===`section-${name}`));document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.section===name));[$("sectionTitle").textContent,$("sectionSubtitle").textContent]=sectionMeta[name];closeDrawer();if(name==="gallery")loadGallery();}
+
+async function loadTemplates(){state.templates=await api("api/templates");renderTemplateList();}
+function renderTemplateList(){const q=$("templateSearch").value.trim().toLowerCase();$("templateList").replaceChildren(...state.templates.filter(t=>t.name.toLowerCase().includes(q)).map(t=>{const b=document.createElement("button");b.className="template-item"+(state.currentTemplate?.id===t.id?" active":"");b.innerHTML=`<strong>${escapeHtml(t.name)}</strong><span>${formatDate(t.updatedAt)}</span>`;b.onclick=()=>openTemplate(t.id);return b;}));}
+function createTemplateDraft(){state.currentTemplate={id:null,name:"Новый шаблон",contentHtml:'<p style="text-align:center"><strong>ЗАЯВЛЕНИЕ</strong></p><p><br></p><p>Я, ________________________________, прошу предоставить мне ________________________________.</p>'};$("templateName").value=state.currentTemplate.name;$("templateEditor").innerHTML=state.currentTemplate.contentHtml;setTemplateMode("editor");renderTemplateList();}
+async function openTemplate(id){state.currentTemplate=await api(`api/templates/${id}`);$("templateName").value=state.currentTemplate.name;$("templateEditor").innerHTML=state.currentTemplate.contentHtml;setTemplateMode("editor");renderTemplateList();}
+async function saveTemplate(){if(!state.currentTemplate)return;convertTemplateFields();const payload={name:$("templateName").value.trim(),contentHtml:sanitizeHtml($("templateEditor").innerHTML)};const isNew=!state.currentTemplate.id;state.currentTemplate=await api(isNew?"api/templates":`api/templates/${state.currentTemplate.id}`,{method:isNew?"POST":"PUT",body:payload});await loadTemplates();showToast("Шаблон сохранён");}
+async function duplicateTemplate(){if(!state.currentTemplate)return;const payload={name:`${$("templateName").value} — копия`,contentHtml:$("templateEditor").innerHTML};state.currentTemplate=await api("api/templates",{method:"POST",body:payload});await loadTemplates();showToast("Копия создана");}
+async function deleteTemplate(){if(!state.currentTemplate?.id||!confirm("Удалить шаблон?"))return;await api(`api/templates/${state.currentTemplate.id}`,{method:"DELETE"});await loadTemplates();createTemplateDraft();}
+function insertTemplateField(){const span=document.createElement("span");span.className="template-field";span.dataset.field="1";span.innerHTML="&nbsp;";const sel=getSelection();if(sel?.rangeCount){const r=sel.getRangeAt(0);r.deleteContents();r.insertNode(span);r.setStartAfter(span);r.collapse(true);sel.removeAllRanges();sel.addRange(r);}else $("templateEditor").append(span);}
+function convertTemplateFields(){const root=$("templateEditor");const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);for(const n of nodes){if(n.parentElement?.closest(".template-field"))continue;const parts=n.nodeValue.split(/(_{3,})/g);if(parts.length<2)continue;const frag=document.createDocumentFragment();parts.forEach(p=>{if(/^_{3,}$/.test(p)){const s=document.createElement("span");s.className="template-field";s.dataset.field="1";s.innerHTML="&nbsp;";frag.append(s);}else frag.append(document.createTextNode(p));});n.replaceWith(frag);}}
+function setTemplateMode(mode){state.templateMode=mode;document.querySelectorAll("[data-template-mode]").forEach(b=>b.classList.toggle("active",b.dataset.templateMode===mode));$("templateEditorMode").classList.toggle("hidden",mode!=="editor");$("templateFillMode").classList.toggle("hidden",mode!=="fill");if(mode==="fill")buildFillDocument();}
+function buildFillDocument(){const clone=$("templateEditor").cloneNode(true);clone.querySelectorAll(".template-field").forEach((f,i)=>{const s=document.createElement("span");s.className="fill-field";s.contentEditable="true";s.dataset.fieldIndex=String(i);s.innerHTML="&nbsp;";f.replaceWith(s);});$("fillDocument").innerHTML=clone.innerHTML;}
+async function saveTemplateFromFill(){const clone=$("fillDocument").cloneNode(true);clone.querySelectorAll(".fill-field").forEach(f=>{const s=document.createElement("span");s.className="template-field";s.dataset.field="1";s.innerHTML="&nbsp;";f.replaceWith(s);});$("templateEditor").innerHTML=clone.innerHTML;await saveTemplate();}
+function exportTemplatePdf(){const target=$("fillDocument");target.classList.add("print-target");window.print();setTimeout(()=>target.classList.remove("print-target"),500);}
+async function saveFilledToGallery(){const title=$("templateName").value.trim()||"Заполненный шаблон";const html=`<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:'Times New Roman',serif;padding:40px;line-height:1.45}</style>${$("fillDocument").innerHTML}`;await saveBlobToGallery(new Blob([html],{type:"text/html"}),title,"template",state.currentTemplate?.id);showToast("Документ сохранён в галерею");}
+async function exportTemplateWord(){const blocks=htmlToWordBlocks($("fillDocument"));const r=await fetch("api/export/word",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({fileName:$("templateName").value,blocks})});if(!r.ok)throw new Error("Не удалось создать Word");downloadBlob(await r.blob(),`${safeName($("templateName").value)}.docx`);}
+function htmlToWordBlocks(root){return [...root.children].map(x=>({kind:"paragraph",paragraph:{alignment:getComputedStyle(x).textAlign,headingLevel:null,runs:[{text:x.innerText,bold:false,italic:false,underline:false,strike:false,fontSize:12,color:"000000",break:false}]},rows:null}));}
+
+async function loadAssets(){const all=await api("api/assets");state.assets.signature=all.filter(x=>x.type==="signature");state.assets.font=all.filter(x=>x.type==="font");state.assets.background=all.filter(x=>x.type==="background");registerFonts();renderAllAssets();populateHandSelects();}
+async function loadBuiltInSignatures(){try{state.builtInSignatures=await (await fetch("signatures-manifest.json",{cache:"no-store"})).json();}catch{state.builtInSignatures=[];}renderSignatureGrid();}
+function assetUrl(a){return `api/assets/${a.id}/file`;}
+async function uploadAssets(type,files,input){if(!files?.length)return;const fd=new FormData();[...files].forEach(f=>fd.append("files",f));const r=await fetch(`api/assets/${type}`,{method:"POST",credentials:"same-origin",body:fd});const data=await readData(r);if(!r.ok)throw new Error(data?.error||"Ошибка загрузки");input.value="";await loadAssets();showToast(`Загружено: ${data.length}`);}
+async function deleteAsset(id){await api(`api/assets/${id}`,{method:"DELETE"});await loadAssets();}
+function renderAllAssets(){renderSignatureGrid();renderFontGrid();renderBackgroundGrid();}
+function renderSignatureGrid(){const built=state.builtInSignatures.map(x=>({id:`builtin-${x.id}`,name:x.title,url:x.file,builtin:true}));const custom=state.assets.signature.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x}));renderAssetCards($("signatureGrid"),[...custom,...built],"signature");}
+function renderFontGrid(){const defaults=[{id:"default-segoe",name:"Segoe Print",url:null,builtin:true},{id:"default-comic",name:"Comic Sans MS",url:null,builtin:true}];renderAssetCards($("fontGrid"),[...state.assets.font.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x})),...defaults],"font");}
+function renderBackgroundGrid(){const defaults=[{id:"lined",name:"Тетрадь в линейку",preset:"lined",builtin:true},{id:"grid",name:"Тетрадь в клетку",preset:"grid",builtin:true},{id:"blank",name:"Белый лист",preset:"blank",builtin:true},{id:"yellow",name:"Жёлтая бумага",preset:"yellow",builtin:true}];renderAssetCards($("backgroundGrid"),[...state.assets.background.map(x=>({id:x.id,name:x.name,url:assetUrl(x),record:x})),...defaults],"background");}
+function renderAssetCards(root,items,type){root.replaceChildren(...items.map(item=>{const card=document.createElement("article");card.className="asset-card";const preview=document.createElement("div");preview.className="asset-preview"+(type==="background"?" background-thumb":"");if(type==="font"){preview.classList.add("font-sample");preview.textContent="Пример рукописного текста";preview.style.fontFamily=item.name;}else if(type==="background"&&item.preset){preview.classList.add(`hand-paper`,item.preset);preview.style.height="130px";}else{const img=new Image();img.src=item.url;preview.append(img);}const actions=document.createElement("div");actions.className="asset-actions";const use=document.createElement("button");use.textContent=type==="signature"?"Добавить на лист":"Использовать";use.onclick=()=>useAsset(type,item);actions.append(use);if(item.record){const del=document.createElement("button");del.textContent="Удалить";del.onclick=()=>deleteAsset(item.id);actions.append(del);}card.append(preview,Object.assign(document.createElement("div"),{className:"asset-name",textContent:item.name}),actions);return card;}));}
+function useAsset(type,item){if(type==="font"){$("handFont").value=item.record?`asset:${item.id}`:item.name;renderHandwriting();showSection("handwriting");}else if(type==="background"){$("handBackground").value=item.record?`asset:${item.id}`:item.preset;applyHandBackground();showSection("handwriting");}else{addHandSignature(item);showSection("handwriting");}}
+function registerFonts(){state.assets.font.forEach(a=>{if(document.getElementById(`font-${a.id}`))return;const st=document.createElement("style");st.id=`font-${a.id}`;st.textContent=`@font-face{font-family:"AssetFont_${a.id.replaceAll("-","")}";src:url("${assetUrl(a)}");font-display:swap}`;document.head.append(st);});}
+function populateHandSelects(){const f=$("handFont"),bg=$("handBackground");const currentF=f.value,currentB=bg.value;f.innerHTML='<option value="Segoe Print">Segoe Print</option><option value="Comic Sans MS">Comic Sans MS</option>'+state.assets.font.map(a=>`<option value="asset:${a.id}">${escapeHtml(a.name)}</option>`).join("");bg.innerHTML='<option value="lined">Линейка</option><option value="grid">Клетка</option><option value="blank">Белый</option><option value="yellow">Жёлтый</option>'+state.assets.background.map(a=>`<option value="asset:${a.id}">${escapeHtml(a.name)}</option>`).join("");if([...f.options].some(o=>o.value===currentF))f.value=currentF;if([...bg.options].some(o=>o.value===currentB))bg.value=currentB;}
+
+function renderHandwriting(){const r=$("handTextRender"),font=$("handFont").value,p=penPresets[$("penPreset").value];r.textContent=$("handText").value;r.style.fontFamily=font.startsWith("asset:")?`"AssetFont_${font.slice(6).replaceAll("-","")}"`:`"${font}",cursive`;r.style.fontSize=`${$("handSize").value}px`;r.style.lineHeight=`${$("handLine").value}px`;r.style.color=p.color;r.style.opacity=(p.opacity*Number($("handOpacity").value)/100).toFixed(2);r.style.textShadow=p.shadow;r.style.fontWeight=String(p.weight);state.hand.rotation=Number($("handRotate").value);state.hand.skewX=Number($("handSkewX").value);state.hand.skewY=Number($("handSkewY").value);applyHandBox();}
+function applyHandBox(){const b=$("handTextBox");Object.assign(b.style,{left:`${state.hand.x}px`,top:`${state.hand.y}px`,width:`${state.hand.w}px`,height:`${state.hand.h}px`,transform:`rotate(${state.hand.rotation}deg) skew(${state.hand.skewX}deg,${state.hand.skewY}deg)`});}
+function applyHandBackground(){const paper=$("handPaper"),v=$("handBackground").value;paper.className="hand-paper";paper.style.backgroundImage="";if(v.startsWith("asset:")){paper.style.backgroundImage=`url("api/assets/${v.slice(6)}/file")`;paper.style.backgroundSize="cover";paper.style.backgroundPosition="center";}else paper.classList.add(v);}
+function resetHandTransform(){Object.assign(state.hand,{x:105,y:55,w:620,h:850,rotation:0,skewX:0,skewY:0});$("handRotate").value=0;$("handSkewX").value=0;$("handSkewY").value=0;applyHandBox();}
+function startHandTransform(e){const h=e.target.dataset.handle;const box=$("handTextBox");box.setPointerCapture?.(e.pointerId);state.hand.drag={pointerId:e.pointerId,mode:h?"resize":"move",handle:h,startX:e.clientX,startY:e.clientY,x:state.hand.x,y:state.hand.y,w:state.hand.w,h:state.hand.h};e.preventDefault();}
+function moveHandTransform(e){const d=state.hand.drag;if(!d||d.pointerId!==e.pointerId)return;const dx=e.clientX-d.startX,dy=e.clientY-d.startY;if(d.mode==="move"){state.hand.x=d.x+dx;state.hand.y=d.y+dy;}else{if(d.handle.includes("e"))state.hand.w=Math.max(120,d.w+dx);if(d.handle.includes("s"))state.hand.h=Math.max(100,d.h+dy);if(d.handle.includes("w")){state.hand.x=d.x+dx;state.hand.w=Math.max(120,d.w-dx);}if(d.handle.includes("n")){state.hand.y=d.y+dy;state.hand.h=Math.max(100,d.h-dy);}}applyHandBox();}
+function endHandTransform(e){if(state.hand.drag?.pointerId===e.pointerId)state.hand.drag=null;}
+function addHandSignature(item){const s={id:crypto.randomUUID(),name:item.name,url:item.url,x:280+state.hand.signatures.length*16,y:930-state.hand.signatures.length*12,w:260,h:85,rotation:(Math.random()*6-3)};state.hand.signatures.push(s);renderHandSignatures();}
+function renderHandSignatures(){$("handSignatures").replaceChildren(...state.hand.signatures.map(s=>{const d=document.createElement("div");d.className="placed-signature"+(state.hand.selectedSignature===s.id?" selected":"");d.dataset.id=s.id;Object.assign(d.style,{left:`${s.x}px`,top:`${s.y}px`,width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});const i=new Image();i.src=s.url;d.append(i);return d;}));}
+function startSignatureDrag(e){const d=e.target.closest(".placed-signature");if(!d)return;const s=state.hand.signatures.find(x=>x.id===d.dataset.id);state.hand.selectedSignature=s.id;renderHandSignatures();const startX=e.clientX,startY=e.clientY,ox=s.x,oy=s.y;const move=ev=>{s.x=ox+ev.clientX-startX;s.y=oy+ev.clientY-startY;renderHandSignatures();};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);e.preventDefault();}
+
+async function exportHandwritingPdf(save){const canvas=await renderHandCanvas();const blob=canvasToPdf(canvas);const title=`Рукописный документ ${new Date().toLocaleDateString("ru-RU")}`;if(save)await saveBlobToGallery(blob,title,"handwriting",null);else downloadBlob(blob,`${safeName(title)}.pdf`);showToast(save?"PDF сохранён в галерею":"PDF сформирован");}
+async function renderHandCanvas(){const paper=$("handPaper"),canvas=document.createElement("canvas");canvas.width=paper.clientWidth*2;canvas.height=paper.clientHeight*2;const c=canvas.getContext("2d");c.scale(2,2);await drawBackground(c,paper.clientWidth,paper.clientHeight);c.strokeStyle="#efaaa9";c.lineWidth=2;c.beginPath();c.moveTo(82,0);c.lineTo(82,paper.clientHeight);c.stroke();drawHandText(c);for(const s of state.hand.signatures){const img=await loadImage(s.url);c.save();c.translate(s.x+s.w/2,s.y+s.h/2);c.rotate(s.rotation*Math.PI/180);c.drawImage(img,-s.w/2,-s.h/2,s.w,s.h);c.restore();}return canvas;}
+async function drawBackground(c,w,h){const v=$("handBackground").value;c.fillStyle=v==="yellow"?"#fff8d7":"#fff";c.fillRect(0,0,w,h);if(v.startsWith("asset:")){const img=await loadImage(`api/assets/${v.slice(6)}/file`);c.drawImage(img,0,0,w,h);return;}c.strokeStyle=v==="yellow"?"rgba(198,178,102,.45)":"#b8d3ef";c.lineWidth=1;if(v==="lined"||v==="yellow")for(let y=39;y<h;y+=39){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}if(v==="grid")for(let x=0;x<w;x+=38){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();}if(v==="grid")for(let y=0;y<h;y+=38){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}}
+function drawHandText(c){const p=penPresets[$("penPreset").value],fontValue=$("handFont").value,fontName=fontValue.startsWith("asset:")?`AssetFont_${fontValue.slice(6).replaceAll("-","")}`:fontValue,size=Number($("handSize").value),line=Number($("handLine").value);c.save();c.translate(state.hand.x+state.hand.w/2,state.hand.y+state.hand.h/2);c.rotate(state.hand.rotation*Math.PI/180);c.transform(1,Math.tan(state.hand.skewY*Math.PI/180),Math.tan(state.hand.skewX*Math.PI/180),1,0,0);c.translate(-state.hand.w/2,-state.hand.h/2);c.font=`${p.weight} ${size}px "${fontName}"`;c.fillStyle=p.color;c.globalAlpha=p.opacity*Number($("handOpacity").value)/100;c.textBaseline="top";const lines=wrapText(c,$("handText").value,state.hand.w);let y=0;for(const ln of lines){if(y+line>state.hand.h)break;c.fillText(ln,0,y);if($("penPreset").value==="ball-weak"&&Math.random()>.55){c.globalAlpha*=.55;c.fillText(ln,.4,y+.15);c.globalAlpha=p.opacity*Number($("handOpacity").value)/100;}y+=line;}c.restore();}
+function wrapText(c,text,max){const out=[];for(const paragraph of text.split("\n")){if(!paragraph){out.push("");continue;}let line="";for(const word of paragraph.split(/\s+/)){const test=line?`${line} ${word}`:word;if(c.measureText(test).width>max&&line){out.push(line);line=word;}else line=test;}out.push(line);}return out;}
+function canvasToPdf(canvas){const data=atob(canvas.toDataURL("image/jpeg",.92).split(",")[1]),bytes=Uint8Array.from(data,c=>c.charCodeAt(0)),w=595,h=842;const parts=[],offsets=[];const push=s=>parts.push(new TextEncoder().encode(s));push("%PDF-1.4\n");const obj=(n,content)=>{offsets[n]=parts.reduce((a,b)=>a+b.length,0);push(`${n} 0 obj\n${content}\nendobj\n`);};obj(1,"<< /Type /Catalog /Pages 2 0 R >>");obj(2,"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");obj(3,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);offsets[4]=parts.reduce((a,b)=>a+b.length,0);push(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`);parts.push(bytes);push("\nendstream\nendobj\n");const content=`q ${w} 0 0 ${h} 0 0 cm /Im0 Do Q`;obj(5,`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);const xref=parts.reduce((a,b)=>a+b.length,0);push("xref\n0 6\n0000000000 65535 f \n");for(let i=1;i<=5;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);return new Blob(parts,{type:"application/pdf"});}
+
+async function loadGallery(){state.gallery=await api("api/documents");renderGallery();}
+function renderGallery(){$("galleryGrid").replaceChildren(...state.gallery.map(d=>{const card=document.createElement("article");card.className="gallery-card";card.innerHTML=`<h3>${escapeHtml(d.title)}</h3><p>${d.kind==="handwriting"?"Рукописный PDF":d.kind==="template"?"Заполненный шаблон":"Документ"} · ${formatDate(d.createdAt)}</p>`;const actions=document.createElement("div");actions.className="asset-actions";const a=document.createElement("a");a.href=`api/documents/${d.id}/file`;a.textContent="Скачать";const del=document.createElement("button");del.textContent="Удалить";del.onclick=async()=>{await api(`api/documents/${d.id}`,{method:"DELETE"});loadGallery();};actions.append(a,del);card.append(actions);return card;}));}
+async function saveBlobToGallery(blob,title,kind,templateId){const fd=new FormData();fd.append("file",blob,kind==="handwriting"?`${safeName(title)}.pdf`:`${safeName(title)}.html`);fd.append("title",title);fd.append("kind",kind);if(templateId)fd.append("templateId",templateId);const r=await fetch("api/documents",{method:"POST",credentials:"same-origin",body:fd});if(!r.ok)throw new Error((await readData(r))?.error||"Ошибка сохранения");await loadGallery();}
+async function uploadDocuments(files,input){for(const f of files){const fd=new FormData();fd.append("file",f);fd.append("title",f.name.replace(/\.[^.]+$/,"") );fd.append("kind",f.type==="application/pdf"?"handwriting":"document");const r=await fetch("api/documents",{method:"POST",credentials:"same-origin",body:fd});if(!r.ok)throw new Error("Не удалось загрузить документ");}input.value="";await loadGallery();}
+
+async function api(url,opt={}){const init={credentials:"same-origin",method:opt.method||"GET",headers:{}};if(opt.body!==undefined){init.headers["Content-Type"]="application/json";init.body=JSON.stringify(opt.body);}const r=await fetch(url,init);if(r.status===204)return null;const data=await readData(r);if(!r.ok)throw new Error(data?.error||`Ошибка ${r.status}`);return data;}
+async function readData(r){const t=await r.text();try{return t?JSON.parse(t):null;}catch{return null;}}
+function sanitizeHtml(html){const d=document.createElement("div");d.innerHTML=html;d.querySelectorAll("script,style,iframe,object,embed").forEach(x=>x.remove());d.querySelectorAll("*").forEach(x=>[...x.attributes].forEach(a=>{if(a.name.startsWith("on"))x.removeAttribute(a.name);}));return d.innerHTML;}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function formatDate(v){return new Date(v).toLocaleString("ru-RU");}
+function safeName(v){return String(v||"document").replace(/[\\/:*?"<>|]+/g,"_").trim()||"document";}
+function downloadBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin="anonymous";i.onload=()=>res(i);i.onerror=rej;i.src=src;});}
+function showToast(text,error=false){clearTimeout(toastTimer);$("toast").textContent=text;$("toast").classList.toggle("error",error);$("toast").classList.add("show");toastTimer=setTimeout(()=>$("toast").classList.remove("show"),2600);}

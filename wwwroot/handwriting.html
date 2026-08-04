@@ -13,7 +13,7 @@
     <div>
       <a class="back" href="./">← Шаблоны</a>
       <h1>Рукописный текст</h1>
-      <p>Конспекты на тетрадных листах и библиотека синтетических подписей.</p>
+      <p>Конспекты на тетрадных листах, свои шрифты, фоны и PNG-подписи.</p>
     </div>
     <div class="top-actions">
       <span id="currentUser" class="user"></span>
@@ -24,16 +24,32 @@
   <main class="content">
     <div class="tabs" role="tablist">
       <button id="textTab" class="tab active" type="button" role="tab" aria-selected="true">Рукописный текст</button>
-      <button id="signaturesTab" class="tab" type="button" role="tab" aria-selected="false">Подписи <span class="count">1000</span></button>
+      <button id="signaturesTab" class="tab" type="button" role="tab" aria-selected="false">Подписи <span class="count">1000 PNG</span></button>
     </div>
 
     <section id="textPanel" class="panel">
       <aside class="controls">
         <label>Текст
-          <textarea id="sourceText" rows="14" placeholder="Вставьте текст конспекта…">Тема: Рукописный конспект
+          <textarea id="sourceText" rows="11" placeholder="Вставьте текст конспекта…">Тема: Рукописный конспект
 
-Введите сюда текст. Он появится на тетрадном листе справа. Подпись из соседней вкладки можно добавить в нижнюю часть страницы.</textarea>
+Введите сюда текст. Он появится на листе справа. На лист можно добавить любое количество подписей из библиотеки или свои PNG-файлы.</textarea>
         </label>
+
+        <section class="control-section">
+          <div class="section-title">Шрифт</div>
+          <label>Выбранный шрифт
+            <select id="fontFamily">
+              <option value="Segoe Print">Segoe Print</option>
+              <option value="Comic Sans MS">Comic Sans MS</option>
+              <option value="cursive">Системный рукописный</option>
+            </select>
+          </label>
+          <label class="file-button">+ Загрузить свой TTF / OTF / WOFF
+            <input id="fontUpload" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
+          </label>
+          <div id="fontUploadStatus" class="muted"></div>
+        </section>
+
         <div class="control-grid">
           <label>Размер
             <input id="fontSize" type="range" min="18" max="42" value="27">
@@ -48,18 +64,91 @@
             <input id="jitter" type="range" min="0" max="4" value="1.4" step="0.2">
           </label>
         </div>
-        <label class="check"><input id="showSignature" type="checkbox" checked> Показывать выбранную подпись</label>
+
+
+        <section class="control-section">
+          <div class="section-title">Положение и перспектива текста</div>
+          <label class="check"><input id="textTransformMode" type="checkbox"> Редактировать текст прямо на листе</label>
+          <div class="control-grid">
+            <label>Масштаб по ширине
+              <input id="textScaleX" type="range" min="45" max="180" value="100">
+            </label>
+            <label>Масштаб по высоте
+              <input id="textScaleY" type="range" min="45" max="180" value="100">
+            </label>
+            <label>Поворот
+              <input id="textRotation" type="range" min="-30" max="30" value="0">
+            </label>
+            <label>Перспектива по горизонтали
+              <input id="textPerspectiveX" type="range" min="-55" max="55" value="0">
+            </label>
+            <label>Перспектива по вертикали
+              <input id="textPerspectiveY" type="range" min="-45" max="45" value="0">
+            </label>
+            <label>Изгиб текста
+              <input id="textBend" type="range" min="-35" max="35" value="0">
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="resetTextTransform" class="button" type="button">Сбросить положение текста</button>
+          </div>
+          <p class="muted">Включи режим и тяни текст за область. Круглый маркер меняет размер, верхний — горизонтальную перспективу, левый — вертикальную. «Изгиб» помогает уложить строки на слегка согнутый лист.</p>
+        </section>
+        <section class="control-section">
+          <div class="section-title">Фон листа</div>
+          <label>Тип фона
+            <select id="backgroundPreset">
+              <option value="lined">Тетрадь в линейку</option>
+              <option value="grid">Тетрадь в клетку</option>
+              <option value="blank">Белый лист</option>
+              <option value="yellow">Жёлтая бумага</option>
+              <option value="custom">Загруженный фон</option>
+            </select>
+          </label>
+          <label class="file-button">+ Загрузить свой фон
+            <input id="backgroundUpload" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+          </label>
+          <button id="clearBackground" class="button small" type="button">Удалить загруженный фон</button>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title">Подписи на листе</div>
+          <label class="check"><input id="showSignature" type="checkbox" checked> Показывать подписи</label>
+          <label>Масштаб выделенной подписи
+            <input id="signatureScale" type="range" min="40" max="220" value="100">
+          </label>
+          <label>Поворот выделенной подписи
+            <input id="signatureRotation" type="range" min="-30" max="30" value="0">
+          </label>
+          <div class="button-row">
+            <button id="centerSignature" class="button" type="button">Выделенную вниз по центру</button>
+            <button id="mutateSignature" class="button" type="button">Слегка изменить</button>
+          </div>
+          <div class="button-row">
+            <button id="duplicateSignature" class="button" type="button">Дублировать</button>
+            <button id="removeSignature" class="button" type="button">Удалить выделенную</button>
+            <button id="clearAllSignatures" class="button" type="button">Очистить все</button>
+          </div>
+          <p id="selectedSignatureLabel" class="selected-label">Подписей на листе: 0</p>
+          <p class="muted">Подписей может быть любое количество. Выбери подпись во вкладке справа, она добавится на лист. Перетаскивай, масштабируй и дублируй.</p>
+        </section>
+
         <div class="button-row">
           <button id="printNotes" class="button primary" type="button">Печать / PDF</button>
-          <button id="clearSignature" class="button" type="button">Убрать подпись</button>
         </div>
-        <p id="selectedSignatureLabel" class="selected-label">Подпись не выбрана</p>
       </aside>
+
       <div class="paper-wrap">
-        <article id="paper" class="paper" aria-label="Предпросмотр рукописного текста">
+        <article id="paper" class="paper background-lined" aria-label="Предпросмотр рукописного текста">
+          <img id="printBackground" class="print-background" alt="" aria-hidden="true">
           <div class="paper-margin"></div>
-          <div id="handwrittenText" class="handwritten-text"></div>
-          <img id="paperSignature" class="paper-signature hidden" alt="Выбранная подпись">
+          <div id="textTransformLayer" class="text-transform-layer">
+            <div id="handwrittenText" class="handwritten-text"></div>
+            <span class="text-handle text-resize-handle" data-text-handle="resize" title="Масштабировать текст"></span>
+            <span class="text-handle text-perspective-x-handle" data-text-handle="perspective-x" title="Горизонтальная перспектива"></span>
+            <span class="text-handle text-perspective-y-handle" data-text-handle="perspective-y" title="Вертикальная перспектива"></span>
+          </div>
+          <div id="signatureCanvas" class="signature-canvas"></div>
         </article>
       </div>
     </section>
@@ -69,9 +158,12 @@
         <label class="search"><span>Поиск</span><input id="signatureSearch" type="search" placeholder="Например: 0427"></label>
         <button id="shuffleButton" class="button" type="button">Перемешать</button>
         <button id="showAllButton" class="button" type="button">Показать все</button>
+        <label class="file-button inline">+ Загрузить свои PNG подписи
+          <input id="signatureUpload" type="file" multiple accept="image/png,.png">
+        </label>
         <span id="resultCount" class="result-count"></span>
       </div>
-      <p class="notice">Все изображения синтетические и созданы специально для библиотеки. Они не копируют подписи конкретных людей.</p>
+      <p class="notice">Встроенные подписи теперь в PNG. Свои подписи тоже можно загружать в PNG. Любую подпись можно добавлять на лист сколько угодно раз, а затем слегка менять, чтобы варианты отличались друг от друга.</p>
       <div id="signatureGrid" class="signature-grid" aria-live="polite"></div>
       <button id="loadMoreButton" class="button load-more" type="button">Показать ещё</button>
     </section>

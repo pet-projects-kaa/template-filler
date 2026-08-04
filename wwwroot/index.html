@@ -1,189 +1,173 @@
 <!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Набивалка шаблонов</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document Studio</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="appShell" class="app-shell hidden">
-    <header class="app-header">
-        <div>
-            <h1>Набивалка шаблонов</h1>
-            <p>Создавайте, заполняйте и выгружайте документы в Word.</p>
-        </div>
-        <div class="header-actions">
-            <a class="button subtle" href="handwriting.html">Рукописный текст</a>
-            <span id="saveStatus" class="save-status">Готово</span>
-            <button id="saveButton" class="button primary" type="button">Сохранить</button>
-            <div class="user-menu">
-                <span id="currentUser" class="current-user"></span>
-                <button id="changePasswordButton" class="button subtle" type="button">Сменить пароль</button>
-                <button id="logoutButton" class="button subtle danger-text" type="button">Выйти</button>
-            </div>
-        </div>
+<div id="app" class="app hidden">
+  <aside id="drawer" class="drawer">
+    <div class="drawer-head">
+      <div class="brand-mark">DS</div>
+      <div><strong>Document Studio</strong><small>шаблоны и рукопись</small></div>
+      <button id="drawerClose" class="icon-button drawer-close" type="button">×</button>
+    </div>
+    <nav class="drawer-nav">
+      <button class="nav-item active" data-section="templates"><span>▤</span><b>Набивалка шаблонов</b></button>
+      <button class="nav-item" data-section="handwriting"><span>✎</span><b>Рукописный текст</b></button>
+      <button class="nav-item" data-section="signatures"><span>⌁</span><b>Подписи</b></button>
+      <button class="nav-item" data-section="fonts"><span>Aa</span><b>Шрифты</b></button>
+      <button class="nav-item" data-section="backgrounds"><span>▧</span><b>Фоны</b></button>
+      <button class="nav-item" data-section="gallery"><span>▦</span><b>Галерея документов</b></button>
+    </nav>
+    <div class="drawer-foot">
+      <span id="currentUser"></span>
+      <button id="changePasswordButton" class="text-button" type="button">Сменить пароль</button>
+      <button id="logoutButton" class="text-button danger" type="button">Выйти</button>
+    </div>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+
+  <div class="shell">
+    <header class="topbar">
+      <button id="drawerToggle" class="icon-button menu-button" type="button" aria-label="Открыть меню">☰</button>
+      <div><h1 id="sectionTitle">Набивалка шаблонов</h1><p id="sectionSubtitle">Создание, заполнение и экспорт документов.</p></div>
+      <div class="top-actions"><span id="saveStatus" class="status">Готово</span></div>
     </header>
 
-    <div class="workspace">
-        <aside class="sidebar">
+    <main class="main-content">
+      <section id="section-templates" class="section active">
+        <div class="templates-layout">
+          <aside class="panel template-list-panel">
             <button id="newTemplateButton" class="button primary wide" type="button">+ Новый шаблон</button>
-            <label class="search-box">
-                <span class="sr-only">Поиск шаблонов</span>
-                <input id="templateSearch" type="search" placeholder="Поиск шаблонов">
-            </label>
-            <div id="templateList" class="template-list" aria-live="polite"></div>
-        </aside>
-
-        <main class="main-panel">
-            <div class="document-header">
-                <label class="template-name-field">
-                    <span>Название шаблона</span>
-                    <input id="templateName" maxlength="120" placeholder="Например: Заявление на отпуск">
-                </label>
-                <div class="document-actions">
-                    <button id="duplicateButton" class="button" type="button">Копировать</button>
-                    <button id="deleteButton" class="button danger-text" type="button">Удалить</button>
-                </div>
+            <input id="templateSearch" class="input" type="search" placeholder="Поиск шаблонов">
+            <div id="templateList" class="template-list"></div>
+          </aside>
+          <div class="panel template-editor-panel">
+            <div class="editor-head">
+              <input id="templateName" class="title-input" maxlength="120" placeholder="Название шаблона">
+              <div class="button-row">
+                <button id="saveTemplateButton" class="button primary" type="button">Сохранить</button>
+                <button id="duplicateTemplateButton" class="button" type="button">Копировать</button>
+                <button id="deleteTemplateButton" class="button danger" type="button">Удалить</button>
+              </div>
             </div>
-
-            <div class="mode-tabs" role="tablist" aria-label="Режим работы">
-                <button id="editorTab" class="mode-tab active" type="button" role="tab" aria-selected="true">Редактор</button>
-                <button id="fillTab" class="mode-tab" type="button" role="tab" aria-selected="false">Заполнение и правка</button>
+            <div class="tabs">
+              <button class="tab active" data-template-mode="editor">Редактор</button>
+              <button class="tab" data-template-mode="fill">Заполнение</button>
             </div>
+            <div id="templateEditorMode">
+              <div class="toolbar">
+                <button data-command="bold"><b>Ж</b></button><button data-command="italic"><i>К</i></button><button data-command="underline"><u>Ч</u></button>
+                <button data-command="justifyLeft">≡</button><button data-command="justifyCenter">≣</button><button data-command="justifyRight">≡</button>
+                <button id="insertFieldButton" class="accent-tool">+ Поле</button><button id="convertFieldsButton">____ → поля</button>
+              </div>
+              <div class="page-stage"><article id="templateEditor" class="document-page" contenteditable="true"></article></div>
+            </div>
+            <div id="templateFillMode" class="hidden">
+              <div class="export-bar">
+                <button id="resetFieldsButton" class="button">Очистить поля</button>
+                <button id="saveFilledTemplateButton" class="button">Сохранить правки шаблона</button>
+                <button id="saveFilledToGalleryButton" class="button">В галерею</button>
+                <button id="exportTemplateWordButton" class="button">Word</button>
+                <button id="exportTemplatePdfButton" class="button primary">PDF</button>
+              </div>
+              <div class="page-stage"><article id="fillDocument" class="document-page" contenteditable="true"></article></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <section id="editorView" class="view-panel">
-                <div class="toolbar" aria-label="Форматирование документа">
-                    <div class="toolbar-group">
-                        <button class="tool-button" type="button" data-command="undo" title="Отменить">↶</button>
-                        <button class="tool-button" type="button" data-command="redo" title="Повторить">↷</button>
-                    </div>
-                    <div class="toolbar-group">
-                        <select id="blockFormat" class="tool-select" title="Стиль абзаца">
-                            <option value="p">Обычный текст</option>
-                            <option value="h1">Заголовок 1</option>
-                            <option value="h2">Заголовок 2</option>
-                            <option value="h3">Заголовок 3</option>
-                        </select>
-                        <select id="fontSize" class="tool-select compact" title="Размер текста">
-                            <option value="3" selected>12</option>
-                            <option value="4">14</option>
-                            <option value="5">18</option>
-                            <option value="6">24</option>
-                            <option value="7">36</option>
-                        </select>
-                    </div>
-                    <div class="toolbar-group">
-                        <button class="tool-button strong" type="button" data-command="bold" title="Полужирный">Ж</button>
-                        <button class="tool-button italic" type="button" data-command="italic" title="Курсив">К</button>
-                        <button class="tool-button underline" type="button" data-command="underline" title="Подчёркнутый">Ч</button>
-                        <button class="tool-button strike" type="button" data-command="strikeThrough" title="Зачёркнутый">abc</button>
-                        <label class="color-tool" title="Цвет текста">
-                            <span>A</span>
-                            <input id="textColor" type="color" value="#20242b">
-                        </label>
-                    </div>
-                    <div class="toolbar-group">
-                        <button class="tool-button" type="button" data-command="justifyLeft" title="По левому краю">≡</button>
-                        <button class="tool-button center-icon" type="button" data-command="justifyCenter" title="По центру">≡</button>
-                        <button class="tool-button right-icon" type="button" data-command="justifyRight" title="По правому краю">≡</button>
-                        <button class="tool-button justify-icon" type="button" data-command="justifyFull" title="По ширине">≡</button>
-                    </div>
-                    <div class="toolbar-group">
-                        <button class="tool-button" type="button" data-command="insertUnorderedList" title="Маркированный список">•☰</button>
-                        <button class="tool-button" type="button" data-command="insertOrderedList" title="Нумерованный список">1☰</button>
-                        <button class="tool-button" type="button" data-command="outdent" title="Уменьшить отступ">⇤</button>
-                        <button class="tool-button" type="button" data-command="indent" title="Увеличить отступ">⇥</button>
-                    </div>
-                    <div class="toolbar-group toolbar-main-action">
-                        <button id="insertFieldButton" class="button accent" type="button">+ Вставить поле</button>
-                        <button id="convertFieldsButton" class="button" type="button">____ → поля</button>
-                        <button class="tool-button" type="button" data-command="removeFormat" title="Очистить форматирование">Tx</button>
-                    </div>
-                </div>
+      <section id="section-handwriting" class="section">
+        <div class="handwriting-layout">
+          <aside class="panel handwriting-controls">
+            <label>Текст<textarea id="handText" rows="9" placeholder="Введите текст"></textarea></label>
+            <div class="quick-actions">
+              <button class="button" data-go="fonts">Поменять шрифт</button>
+              <button class="button" data-go="backgrounds">Поменять фон</button>
+              <button class="button" data-go="signatures">Добавить подпись</button>
+            </div>
+            <label>Шрифт<select id="handFont"></select></label>
+            <label>Фон<select id="handBackground"></select></label>
+            <label>Ручка<select id="penPreset">
+              <option value="ball-light">Светло-синяя шариковая</option>
+              <option value="ball-dark">Тёмно-синяя шариковая</option>
+              <option value="ball-weak">Слабопишущая синяя шариковая</option>
+              <option value="ball-bright">Яркопишущая синяя шариковая</option>
+              <option value="ball-black">Чёрная шариковая</option>
+              <option value="gel-blue">Гелевая синяя</option>
+              <option value="cap-blue">Капиллярная синяя</option>
+              <option value="cap-black">Капиллярная чёрная</option>
+            </select></label>
+            <div class="range-grid">
+              <label>Размер<input id="handSize" type="range" min="16" max="52" value="28"></label>
+              <label>Межстрочный<input id="handLine" type="range" min="24" max="70" value="40"></label>
+              <label>Поворот<input id="handRotate" type="range" min="-25" max="25" value="0"></label>
+              <label>Наклон X<input id="handSkewX" type="range" min="-35" max="35" value="0"></label>
+              <label>Наклон Y<input id="handSkewY" type="range" min="-20" max="20" value="0"></label>
+              <label>Прозрачность<input id="handOpacity" type="range" min="45" max="100" value="94"></label>
+            </div>
+            <div class="button-row">
+              <button id="resetHandTransform" class="button">Сбросить трансформацию</button>
+              <button id="exportHandPdf" class="button primary">Экспорт PDF</button>
+              <button id="saveHandPdf" class="button accent">PDF в галерею</button>
+            </div>
+            <p class="hint">Тяни текст мышью. Маркеры по углам растягивают его независимо по ширине и высоте.</p>
+          </aside>
+          <div class="paper-wrap">
+            <article id="handPaper" class="hand-paper lined">
+              <div class="paper-margin"></div>
+              <div id="handTextBox" class="hand-text-box selected">
+                <div id="handTextRender" class="hand-text-render"></div>
+                <span class="transform-handle nw" data-handle="nw"></span><span class="transform-handle ne" data-handle="ne"></span>
+                <span class="transform-handle sw" data-handle="sw"></span><span class="transform-handle se" data-handle="se"></span>
+              </div>
+              <div id="handSignatures" class="hand-signatures"></div>
+            </article>
+          </div>
+        </div>
+      </section>
 
-                <div class="page-stage">
-                    <article id="editor" class="document-page editable" contenteditable="true" spellcheck="true" aria-label="Редактор шаблона"></article>
-                </div>
-                <p class="editor-hint">
-                    Поставьте курсор и нажмите «Вставить поле» либо преобразуйте готовые прочерки <code>____</code>.
-                    Прочерки в строке ручной даты вида «____ . ____ . 2026 год» сохраняются.
-                </p>
-            </section>
+      <section id="section-signatures" class="section asset-section">
+        <div class="section-toolbar"><div><h2>Подписи</h2><p>Встроенная библиотека и собственные PNG.</p></div><label class="button primary file-button">Загрузить пачку PNG<input id="signatureUpload" type="file" multiple accept="image/png,image/webp"></label></div>
+        <div id="signatureGrid" class="asset-grid"></div>
+      </section>
 
-            <section id="fillView" class="view-panel hidden">
-                <div class="fill-actions">
-                    <div>
-                        <strong>Заполняйте поля и редактируйте текст прямо в документе</strong>
-                        <span id="fieldCount" class="field-count"></span>
-                        <span id="fillEditStatus" class="fill-edit-status">Текст шаблона не изменён</span>
-                    </div>
-                    <div class="fill-buttons">
-                        <button id="resetFillButton" class="button" type="button">Очистить поля</button>
-                        <button id="saveFillTemplateButton" class="button accent" type="button">Сохранить правки шаблона</button>
-                        <button id="wordButton" class="button" type="button">Экспорт в Word</button>
-                        <button id="printButton" class="button primary" type="button">Печать / PDF</button>
-                    </div>
-                </div>
-                <div class="page-stage fill-stage">
-                    <article id="fillDocument" class="document-page fill-document" contenteditable="true" spellcheck="true" aria-label="Заполнение и редактирование шаблона"></article>
-                </div>
-                <p class="editor-hint">
-                    Обычный текст можно исправлять прямо здесь. Кнопка «Сохранить правки шаблона» сохранит изменения текста,
-                    но введённые значения полей останутся только в текущем документе.
-                </p>
-            </section>
-        </main>
+      <section id="section-fonts" class="section asset-section">
+        <div class="section-toolbar"><div><h2>Шрифты</h2><p>Загруженные шрифты доступны в рукописном редакторе.</p></div><label class="button primary file-button">Загрузить пачку шрифтов<input id="fontUpload" type="file" multiple accept=".ttf,.otf,.woff,.woff2"></label></div>
+        <div id="fontGrid" class="asset-grid"></div>
+      </section>
+
+      <section id="section-backgrounds" class="section asset-section">
+        <div class="section-toolbar"><div><h2>Фоны</h2><p>Листы, фотографии бумаги и сканы.</p></div><label class="button primary file-button">Загрузить пачку фонов<input id="backgroundUpload" type="file" multiple accept="image/png,image/jpeg,image/webp"></label></div>
+        <div id="backgroundGrid" class="asset-grid"></div>
+      </section>
+
+      <section id="section-gallery" class="section asset-section">
+        <div class="section-toolbar"><div><h2>Галерея документов</h2><p>Готовые рукописные PDF и заполненные шаблоны.</p></div><label class="button file-button">Загрузить готовые документы<input id="documentUpload" type="file" multiple accept="application/pdf,.docx,text/html"></label></div>
+        <div id="galleryGrid" class="gallery-grid"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div id="loginOverlay" class="overlay">
+  <form id="loginForm" class="login-card">
+    <div class="login-banner"><h2>Вход</h2></div>
+    <div class="login-body">
+      <input id="loginUsername" autocomplete="username" placeholder="Логин" required>
+      <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Пароль" required>
+      <label class="remember"><input id="loginRemember" type="checkbox" checked> Запомнить меня</label>
+      <div id="loginError" class="form-error"></div>
+      <button class="login-submit" type="submit">Войти</button>
     </div>
+  </form>
 </div>
 
-<div id="loginOverlay" class="modal-overlay auth-overlay">
-    <form id="loginForm" class="auth-login-card" autocomplete="on">
-        <div class="auth-login-banner">
-            <h2>Вход</h2>
-        </div>
-        <div class="auth-login-body">
-            <input id="loginUsername" type="text" autocomplete="username" placeholder="Логин" aria-label="Логин" required>
-            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Пароль" aria-label="Пароль" required>
-            <label class="auth-remember">
-                <input id="loginRemember" type="checkbox" checked>
-                <span>Запомнить меня</span>
-            </label>
-            <div id="loginError" class="form-error auth-error" role="alert" aria-live="polite"></div>
-            <button id="loginButton" class="auth-submit" type="submit">Войти</button>
-            <p class="auth-hint">Начальный логин: <strong>01</strong></p>
-        </div>
-    </form>
-</div>
-
-<div id="passwordOverlay" class="modal-overlay hidden">
-    <form id="passwordForm" class="modal-card auth-card">
-        <div class="modal-title-row">
-            <div>
-                <h2>Смена пароля</h2>
-                <p id="passwordDialogHint">Укажите текущий и новый пароль.</p>
-            </div>
-            <button id="closePasswordButton" class="icon-button" type="button" aria-label="Закрыть">×</button>
-        </div>
-        <label class="form-field">
-            <span>Текущий пароль</span>
-            <input id="currentPassword" type="password" autocomplete="current-password" required>
-        </label>
-        <label class="form-field">
-            <span>Новый пароль</span>
-            <input id="newPassword" type="password" minlength="8" autocomplete="new-password" required>
-        </label>
-        <label class="form-field">
-            <span>Повторите новый пароль</span>
-            <input id="confirmPassword" type="password" minlength="8" autocomplete="new-password" required>
-        </label>
-        <div id="passwordError" class="form-error" role="alert"></div>
-        <button class="button primary wide" type="submit">Сохранить новый пароль</button>
-    </form>
-</div>
-
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-
+<div id="passwordOverlay" class="overlay hidden"><form id="passwordForm" class="modal-card"><h2>Смена пароля</h2><input id="currentPassword" type="password" placeholder="Текущий пароль" required><input id="newPassword" type="password" minlength="8" placeholder="Новый пароль" required><input id="confirmPassword" type="password" minlength="8" placeholder="Повторите пароль" required><div id="passwordError" class="form-error"></div><div class="button-row"><button class="button primary" type="submit">Сохранить</button><button id="closePassword" class="button" type="button">Закрыть</button></div></form></div>
+<div id="toast" class="toast"></div>
 <script src="app.js" defer></script>
 </body>
 </html>

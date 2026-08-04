@@ -18,9 +18,7 @@ public sealed record TemplateListItem(
     DateTimeOffset UpdatedAt);
 
 public sealed record LoginRequest(string Username, string Password, bool RememberMe = true);
-
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
-
 public sealed record AuthUserResponse(string Username, bool MustChangePassword);
 
 public sealed record UserAuthRecord(
@@ -32,17 +30,8 @@ public sealed record UserAuthRecord(
     bool MustChangePassword);
 
 public sealed record WordExportRequest(string? FileName, IReadOnlyList<WordBlock>? Blocks);
-
-public sealed record WordBlock(
-    string Kind,
-    WordParagraph? Paragraph,
-    IReadOnlyList<IReadOnlyList<WordParagraph>>? Rows);
-
-public sealed record WordParagraph(
-    string? Alignment,
-    int? HeadingLevel,
-    IReadOnlyList<WordRun>? Runs);
-
+public sealed record WordBlock(string Kind, WordParagraph? Paragraph, IReadOnlyList<IReadOnlyList<WordParagraph>>? Rows);
+public sealed record WordParagraph(string? Alignment, int? HeadingLevel, IReadOnlyList<WordRun>? Runs);
 public sealed record WordRun(
     string? Text,
     bool Bold,
@@ -52,3 +41,22 @@ public sealed record WordRun(
     int? FontSize,
     string? Color,
     bool Break = false);
+
+public sealed record AssetRecord(
+    Guid Id,
+    string Type,
+    string Name,
+    string FileName,
+    string ContentType,
+    long Size,
+    DateTimeOffset CreatedAt);
+
+public sealed record GalleryDocumentRecord(
+    Guid Id,
+    string Kind,
+    string Title,
+    string FileName,
+    string ContentType,
+    long Size,
+    Guid? TemplateId,
+    DateTimeOffset CreatedAt);
