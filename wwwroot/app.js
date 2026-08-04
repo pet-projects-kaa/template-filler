@@ -30,6 +30,7 @@ init();
 
 async function init(){
   wire();
+  if(!$("handDocumentTitle").value) $("handDocumentTitle").value=`Рукописный документ ${new Date().toLocaleDateString("ru-RU")}`;
   try{
     const r=await fetch("api/auth/me",{credentials:"same-origin"});
     if(!r.ok){ showLogin(); return; }
@@ -57,6 +58,10 @@ function wire(){
 
   ["handText","handFont","penPreset","handSize","handLine","handRotate","handSkewX","handSkewY","handOpacity"].forEach(id=>$(id).addEventListener("input",renderHandwriting));
   $("handBackground").onchange=applyHandBackground; $("resetHandTransform").onclick=resetHandTransform;
+  $("signatureScale").oninput=updateSelectedSignatureFromControls;
+  $("signatureRotation").oninput=updateSelectedSignatureFromControls;
+  $("resetSignatureTransform").onclick=resetSelectedSignatureTransform;
+  $("deleteHandSignature").onclick=deleteSelectedHandSignature;
   $("exportHandPdf").onclick=()=>exportHandwritingPdf(false); $("saveHandPdf").onclick=()=>exportHandwritingPdf(true);
   const box=$("handTextBox"); box.addEventListener("pointerdown",startHandTransform); window.addEventListener("pointermove",moveHandTransform); window.addEventListener("pointerup",endHandTransform);
   $("handSignatures").addEventListener("pointerdown",startSignatureDrag);
@@ -253,9 +258,83 @@ function resetHandTransform(){Object.assign(state.hand,{x:105,y:55,w:620,h:850,r
 function startHandTransform(e){const h=e.target.dataset.handle;const box=$("handTextBox");box.setPointerCapture?.(e.pointerId);state.hand.drag={pointerId:e.pointerId,mode:h?"resize":"move",handle:h,startX:e.clientX,startY:e.clientY,x:state.hand.x,y:state.hand.y,w:state.hand.w,h:state.hand.h};e.preventDefault();}
 function moveHandTransform(e){const d=state.hand.drag;if(!d||d.pointerId!==e.pointerId)return;const dx=e.clientX-d.startX,dy=e.clientY-d.startY;if(d.mode==="move"){state.hand.x=d.x+dx;state.hand.y=d.y+dy;}else{if(d.handle.includes("e"))state.hand.w=Math.max(120,d.w+dx);if(d.handle.includes("s"))state.hand.h=Math.max(100,d.h+dy);if(d.handle.includes("w")){state.hand.x=d.x+dx;state.hand.w=Math.max(120,d.w-dx);}if(d.handle.includes("n")){state.hand.y=d.y+dy;state.hand.h=Math.max(100,d.h-dy);}}applyHandBox();}
 function endHandTransform(e){if(state.hand.drag?.pointerId===e.pointerId)state.hand.drag=null;}
-function addHandSignature(item){const s={id:crypto.randomUUID(),name:item.name,url:item.url,x:280+state.hand.signatures.length*16,y:930-state.hand.signatures.length*12,w:260,h:85,rotation:(Math.random()*6-3)};state.hand.signatures.push(s);renderHandSignatures();}
-function renderHandSignatures(){$("handSignatures").replaceChildren(...state.hand.signatures.map(s=>{const d=document.createElement("div");d.className="placed-signature"+(state.hand.selectedSignature===s.id?" selected":"");d.dataset.id=s.id;Object.assign(d.style,{left:`${s.x}px`,top:`${s.y}px`,width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});const i=new Image();i.src=s.url;d.append(i);return d;}));}
-function startSignatureDrag(e){const d=e.target.closest(".placed-signature");if(!d)return;const s=state.hand.signatures.find(x=>x.id===d.dataset.id);state.hand.selectedSignature=s.id;renderHandSignatures();const startX=e.clientX,startY=e.clientY,ox=s.x,oy=s.y;const move=ev=>{s.x=ox+ev.clientX-startX;s.y=oy+ev.clientY-startY;renderHandSignatures();};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);e.preventDefault();}
+function addHandSignature(item){
+  const s={id:crypto.randomUUID(),name:item.name,url:item.url,x:280+state.hand.signatures.length*16,y:930-state.hand.signatures.length*12,w:260,h:85,baseW:260,baseH:85,rotation:(Math.random()*6-3)};
+  state.hand.signatures.push(s);
+  state.hand.selectedSignature=s.id;
+  renderHandSignatures();
+}
+function renderHandSignatures(){
+  $("handSignatures").replaceChildren(...state.hand.signatures.map(s=>{
+    const d=document.createElement("div");
+    d.className="placed-signature"+(state.hand.selectedSignature===s.id?" selected":"");
+    d.dataset.id=s.id;
+    Object.assign(d.style,{left:`${s.x}px`,top:`${s.y}px`,width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});
+    const i=new Image();i.src=s.url;i.alt=s.name;
+    const resize=document.createElement("span");resize.className="signature-resize-handle";resize.title="Изменить размер";
+    const rotate=document.createElement("span");rotate.className="signature-rotate-handle";rotate.title="Повернуть";
+    d.append(i,resize,rotate);
+    return d;
+  }));
+  syncSignatureTransformControls();
+}
+function selectedHandSignature(){return state.hand.signatures.find(x=>x.id===state.hand.selectedSignature)||null;}
+function syncSignatureTransformControls(){
+  const s=selectedHandSignature(),disabled=!s;
+  ["signatureScale","signatureRotation","resetSignatureTransform","deleteHandSignature"].forEach(id=>$(id).disabled=disabled);
+  if(!s){$("signatureTransformHint").textContent="Сначала добавьте и выделите подпись на листе.";return;}
+  const baseW=s.baseW||260;
+  $("signatureScale").value=String(Math.round(s.w/baseW*100));
+  $("signatureRotation").value=String(Math.round(s.rotation));
+  $("signatureTransformHint").textContent=`Выделена: ${s.name}. Размер ${Math.round(s.w/baseW*100)}%, поворот ${Math.round(s.rotation)}°.`;
+}
+function updateSelectedSignatureFromControls(){
+  const s=selectedHandSignature();if(!s)return;
+  s.baseW=s.baseW||260;s.baseH=s.baseH||85;
+  const scale=Number($("signatureScale").value)/100;
+  s.w=s.baseW*scale;s.h=s.baseH*scale;s.rotation=Number($("signatureRotation").value);
+  renderHandSignatures();
+}
+function resetSelectedSignatureTransform(){
+  const s=selectedHandSignature();if(!s)return;
+  s.baseW=s.baseW||260;s.baseH=s.baseH||85;s.w=s.baseW;s.h=s.baseH;s.rotation=0;
+  renderHandSignatures();
+}
+function deleteSelectedHandSignature(){
+  const s=selectedHandSignature();if(!s)return;
+  state.hand.signatures=state.hand.signatures.filter(x=>x.id!==s.id);
+  state.hand.selectedSignature=state.hand.signatures.at(-1)?.id||null;
+  renderHandSignatures();
+}
+function startSignatureDrag(e){
+  const d=e.target.closest(".placed-signature");if(!d)return;
+  const s=state.hand.signatures.find(x=>x.id===d.dataset.id);if(!s)return;
+  state.hand.selectedSignature=s.id;
+  document.querySelectorAll(".placed-signature").forEach(x=>x.classList.toggle("selected",x.dataset.id===s.id));
+  syncSignatureTransformControls();
+  const mode=e.target.classList.contains("signature-resize-handle")?"resize":e.target.classList.contains("signature-rotate-handle")?"rotate":"move";
+  const startX=e.clientX,startY=e.clientY,ox=s.x,oy=s.y,ow=s.w,oh=s.h;
+  const rect=d.getBoundingClientRect(),centerX=rect.left+rect.width/2,centerY=rect.top+rect.height/2;
+  const startAngle=Math.atan2(startY-centerY,startX-centerX),startRotation=s.rotation;
+  const startDistance=Math.max(1,Math.hypot(startX-centerX,startY-centerY));
+  d.setPointerCapture?.(e.pointerId);
+  const move=ev=>{
+    if(mode==="move"){
+      s.x=ox+ev.clientX-startX;s.y=oy+ev.clientY-startY;
+    }else if(mode==="resize"){
+      const distance=Math.max(10,Math.hypot(ev.clientX-centerX,ev.clientY-centerY));
+      const scale=Math.min(3,Math.max(.2,distance/startDistance));
+      s.w=ow*scale;s.h=oh*scale;
+    }else{
+      const angle=Math.atan2(ev.clientY-centerY,ev.clientX-centerX);
+      s.rotation=startRotation+(angle-startAngle)*180/Math.PI;
+    }
+    Object.assign(d.style,{left:`${s.x}px`,top:`${s.y}px`,width:`${s.w}px`,height:`${s.h}px`,transform:`rotate(${s.rotation}deg)`});
+    syncSignatureTransformControls();
+  };
+  const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);renderHandSignatures();};
+  window.addEventListener("pointermove",move);window.addEventListener("pointerup",up,{once:true});e.preventDefault();e.stopPropagation();
+}
 
 
 async function ensureSelectedFontLoaded(){
@@ -264,7 +343,13 @@ async function ensureSelectedFontLoaded(){
   const family=fontFamilyForAsset({id:value.slice(6)});
   try{await document.fonts.load(`32px "${family}"`);await document.fonts.ready;}catch(error){console.error("Не удалось подготовить шрифт к экспорту",error);}
 }
-async function exportHandwritingPdf(save){const canvas=await renderHandCanvas();const blob=canvasToPdf(canvas);const title=`Рукописный документ ${new Date().toLocaleDateString("ru-RU")}`;if(save)await saveBlobToGallery(blob,title,"handwriting",null);else downloadBlob(blob,`${safeName(title)}.pdf`);showToast(save?"PDF сохранён в галерею":"PDF сформирован");}
+async function exportHandwritingPdf(save){
+  const title=$("handDocumentTitle").value.trim();
+  if(!title){$("handDocumentTitle").focus();showToast("Укажите название рукописного документа",true);return;}
+  const canvas=await renderHandCanvas();const blob=canvasToPdf(canvas);
+  if(save)await saveBlobToGallery(blob,title,"handwriting",null);else downloadBlob(blob,`${safeName(title)}.pdf`);
+  showToast(save?`«${title}» сохранён в галерею`:`PDF «${title}» сформирован`);
+}
 async function renderHandCanvas(){await ensureSelectedFontLoaded();const paper=$("handPaper"),canvas=document.createElement("canvas");canvas.width=paper.clientWidth*2;canvas.height=paper.clientHeight*2;const c=canvas.getContext("2d");c.scale(2,2);await drawBackground(c,paper.clientWidth,paper.clientHeight);c.strokeStyle="#efaaa9";c.lineWidth=2;c.beginPath();c.moveTo(82,0);c.lineTo(82,paper.clientHeight);c.stroke();drawHandText(c);for(const s of state.hand.signatures){const img=await loadImage(s.url);c.save();c.translate(s.x+s.w/2,s.y+s.h/2);c.rotate(s.rotation*Math.PI/180);c.drawImage(img,-s.w/2,-s.h/2,s.w,s.h);c.restore();}return canvas;}
 async function drawBackground(c,w,h){const v=$("handBackground").value;c.fillStyle=v==="yellow"?"#fff8d7":"#fff";c.fillRect(0,0,w,h);if(v.startsWith("asset:")){const img=await loadImage(`api/assets/${v.slice(6)}/file`);c.drawImage(img,0,0,w,h);return;}c.strokeStyle=v==="yellow"?"rgba(198,178,102,.45)":"#b8d3ef";c.lineWidth=1;if(v==="lined"||v==="yellow")for(let y=39;y<h;y+=39){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}if(v==="grid")for(let x=0;x<w;x+=38){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();}if(v==="grid")for(let y=0;y<h;y+=38){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}}
 function drawHandText(c){const p=penPresets[$("penPreset").value],fontValue=$("handFont").value,fontName=fontValue.startsWith("asset:")?fontFamilyForAsset({id:fontValue.slice(6)}):fontValue,size=Number($("handSize").value),line=Number($("handLine").value);c.save();c.translate(state.hand.x+state.hand.w/2,state.hand.y+state.hand.h/2);c.rotate(state.hand.rotation*Math.PI/180);c.transform(1,Math.tan(state.hand.skewY*Math.PI/180),Math.tan(state.hand.skewX*Math.PI/180),1,0,0);c.translate(-state.hand.w/2,-state.hand.h/2);c.font=`${p.weight} ${size}px "${fontName}"`;c.fillStyle=p.color;c.globalAlpha=p.opacity*Number($("handOpacity").value)/100;c.textBaseline="top";const lines=wrapText(c,$("handText").value,state.hand.w);let y=0;for(const ln of lines){if(y+line>state.hand.h)break;c.fillText(ln,0,y);if($("penPreset").value==="ball-weak"&&Math.random()>.55){c.globalAlpha*=.55;c.fillText(ln,.4,y+.15);c.globalAlpha=p.opacity*Number($("handOpacity").value)/100;}y+=line;}c.restore();}

@@ -83,6 +83,7 @@
       <section id="section-handwriting" class="section">
         <div class="handwriting-layout">
           <aside class="panel handwriting-controls">
+            <label>Название документа<input id="handDocumentTitle" class="input" maxlength="120" placeholder="Например: Конспект по криминалистике"></label>
             <label>Текст<textarea id="handText" rows="9" placeholder="Введите текст"></textarea></label>
             <div class="quick-actions">
               <button class="button" data-go="fonts">Поменять шрифт</button>
@@ -109,12 +110,24 @@
               <label>Наклон Y<input id="handSkewY" type="range" min="-20" max="20" value="0"></label>
               <label>Прозрачность<input id="handOpacity" type="range" min="45" max="100" value="94"></label>
             </div>
+            <section class="signature-transform-panel">
+              <strong>Выделенная подпись</strong>
+              <div class="range-grid">
+                <label>Размер<input id="signatureScale" type="range" min="20" max="300" value="100"></label>
+                <label>Поворот<input id="signatureRotation" type="range" min="-180" max="180" value="0"></label>
+              </div>
+              <div class="button-row">
+                <button id="resetSignatureTransform" class="button" type="button">Сбросить размер</button>
+                <button id="deleteHandSignature" class="button danger" type="button">Удалить подпись</button>
+              </div>
+              <p id="signatureTransformHint" class="hint">Сначала добавьте и выделите подпись на листе.</p>
+            </section>
             <div class="button-row">
               <button id="resetHandTransform" class="button">Сбросить трансформацию</button>
               <button id="exportHandPdf" class="button primary">Экспорт PDF</button>
               <button id="saveHandPdf" class="button accent">PDF в галерею</button>
             </div>
-            <p class="hint">Тяни текст мышью. Маркеры по углам растягивают его независимо по ширине и высоте.</p>
+            <p class="hint">Текст и подписи можно двигать мышью. У выделенной подписи потяни фиолетовый маркер в углу для масштаба, круглый маркер сверху — для поворота.</p>
           </aside>
           <div class="paper-wrap">
             <article id="handPaper" class="hand-paper lined">
