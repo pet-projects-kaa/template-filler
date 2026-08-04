@@ -23,6 +23,8 @@ builder.Services.Configure<FormOptions>(options =>
 });
 builder.Services.AddSingleton<AppDatabase>();
 builder.Services.AddSingleton<WordDocumentBuilder>();
+builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = 250L * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 250L * 1024 * 1024);
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.Cookie.Name = "template-filler-auth";
