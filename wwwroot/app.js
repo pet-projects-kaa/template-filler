@@ -68,14 +68,89 @@ function wire(){
 }
 
 async function authenticated(user){
-  state.user=user; $("currentUser").textContent=user.username; $("loginOverlay").classList.add("hidden"); $("app").classList.remove("hidden");
-  await Promise.all([loadTemplates(),loadAssets(),loadBuiltInSignatures(),loadGallery()]);
-  createTemplateDraft(); renderHandwriting(); renderAllAssets();
+  state.user=user;
+  $("currentUser").textContent=user.username;
+  $("loginOverlay").classList.add("hidden");
+
+  if(user.mustChangePassword){
+    $("app").classList.add("hidden");
+    $("passwordOverlay").classList.remove("hidden");
+    $("closePassword").classList.add("hidden");
+    $("passwordError").textContent="Перед началом работы смените первоначальный пароль.";
+    return;
+  }
+
+  $("passwordOverlay").classList.add("hidden");
+  $("closePassword").classList.remove("hidden");
+  $("app").classList.remove("hidden");
+  await loadWorkspaceSafely();
 }
-function showLogin(message=""){ $("app").classList.add("hidden"); $("loginOverlay").classList.remove("hidden"); $("loginError").textContent=message; }
-async function login(e){e.preventDefault();try{const u=await api("api/auth/login",{method:"POST",body:{username:$("loginUsername").value.trim(),password:$("loginPassword").value,rememberMe:$("loginRemember").checked}});await authenticated(u);}catch(err){$("loginError").textContent=err.message;}}
-async function logout(){await fetch("api/auth/logout",{method:"POST",credentials:"same-origin"});location.reload();}
-async function changePassword(e){e.preventDefault();const a=$("newPassword").value,b=$("confirmPassword").value;if(a!==b){$("passwordError").textContent="Пароли не совпадают.";return;}try{await api("api/auth/change-password",{method:"POST",body:{currentPassword:$("currentPassword").value,newPassword:a}});$("passwordOverlay").classList.add("hidden");showToast("Пароль изменён");}catch(err){$("passwordError").textContent=err.message;}}
+
+async function loadWorkspaceSafely(){
+  const tasks=[
+    ["шаблоны",loadTemplates],
+    ["объекты",loadAssets],
+    ["встроенные подписи",loadBuiltInSignatures],
+    ["галерею",loadGallery]
+  ];
+  const failures=[];
+  for(const [name,loader] of tasks){
+    try{await loader();}catch(error){console.error(`Не удалось загрузить ${name}`,error);failures.push(name);}
+  }
+  if(!state.currentTemplate) createTemplateDraft();
+  renderHandwriting();
+  renderAllAssets();
+  if(failures.length) showToast(`Вход выполнен, но не удалось загрузить: ${failures.join(", ")}`,true);
+}
+
+function showLogin(message=""){
+  state.user=null;
+  $("app").classList.add("hidden");
+  $("passwordOverlay").classList.add("hidden");
+  $("loginOverlay").classList.remove("hidden");
+  $("loginError").textContent=message;
+  $("loginSubmit").disabled=false;
+  $("loginSubmit").textContent="Войти";
+  setTimeout(()=>$("loginUsername").focus(),0);
+}
+
+async function login(e){
+  e.preventDefault();
+  const username=$("loginUsername").value.trim();
+  const password=$("loginPassword").value;
+  $("loginError").textContent="";
+  if(!username||!password){$("loginError").textContent="Введите логин и пароль.";return;}
+  const button=$("loginSubmit");
+  button.disabled=true;
+  button.textContent="Входим…";
+  try{
+    const u=await api("api/auth/login",{method:"POST",body:{username,password,rememberMe:$("loginRemember").checked}});
+    $("loginPassword").value="";
+    await authenticated(u);
+  }catch(err){
+    $("loginError").textContent=err.message;
+    const card=document.querySelector(".login-card");
+    card.classList.remove("shake");
+    requestAnimationFrame(()=>card.classList.add("shake"));
+  }finally{
+    button.disabled=false;
+    button.textContent="Войти";
+  }
+}
+async function logout(){await fetch("api/auth/logout",{method:"POST",credentials:"same-origin"});showLogin();}
+async function changePassword(e){
+  e.preventDefault();
+  const a=$("newPassword").value,b=$("confirmPassword").value;
+  $("passwordError").textContent="";
+  if(a.length<8){$("passwordError").textContent="Новый пароль должен содержать не менее 8 символов.";return;}
+  if(a!==b){$("passwordError").textContent="Пароли не совпадают.";return;}
+  try{
+    const user=await api("api/auth/change-password",{method:"POST",body:{currentPassword:$("currentPassword").value,newPassword:a}});
+    $("passwordForm").reset();
+    await authenticated(user);
+    showToast("Пароль изменён");
+  }catch(err){$("passwordError").textContent=err.message;}
+}
 
 function openDrawer(){ $("drawer").classList.add("open"); $("drawerBackdrop").classList.remove("hidden"); }
 function closeDrawer(){ $("drawer").classList.remove("open"); $("drawerBackdrop").classList.add("hidden"); }

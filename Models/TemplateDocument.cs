@@ -51,6 +51,11 @@ public sealed record AssetRecord(
     long Size,
     DateTimeOffset CreatedAt);
 
+
+public sealed record AssetBinaryRecord(
+    AssetRecord Metadata,
+    byte[] Data);
+
 public sealed record GalleryDocumentRecord(
     Guid Id,
     string Kind,

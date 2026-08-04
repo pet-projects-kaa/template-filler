@@ -186,10 +186,10 @@ var assets = app.MapGroup("/api/assets").RequireAuthorization();
 assets.MapGet("/", async (string? type, AppDatabase db, CancellationToken ct) => Results.Ok(await db.GetAssetsAsync(NormalizeAssetType(type), ct)));
 assets.MapGet("/{id:guid}/file", async (Guid id, AppDatabase db, CancellationToken ct) =>
 {
-    var asset = await db.GetAssetAsync(id, ct);
-    if (asset is null) return Results.NotFound();
-    var path = Path.Combine(db.AssetsDirectory, asset.Type, asset.FileName);
-    return File.Exists(path) ? Results.File(path, asset.ContentType, enableRangeProcessing: true) : Results.NotFound();
+    var asset = await db.GetAssetBinaryAsync(id, ct);
+    return asset is null
+        ? Results.NotFound()
+        : Results.File(asset.Data, asset.Metadata.ContentType, enableRangeProcessing: true);
 });
 assets.MapPost("/{type}", async (string type, HttpRequest request, AppDatabase db, CancellationToken ct) =>
 {
@@ -200,20 +200,18 @@ assets.MapPost("/{type}", async (string type, HttpRequest request, AppDatabase d
     if (form.Files.Count == 0) return Results.BadRequest(new { error = "Файлы не выбраны." });
     if (form.Files.Count > 200) return Results.BadRequest(new { error = "За один раз можно загрузить не более 200 файлов." });
 
-    var directory = Path.Combine(db.AssetsDirectory, type);
-    Directory.CreateDirectory(directory);
     var created = new List<AssetRecord>();
     foreach (var file in form.Files)
     {
         var validation = ValidateAsset(type, file);
         if (validation is not null) return Results.BadRequest(new { error = $"{file.FileName}: {validation}" });
-        var id = Guid.NewGuid();
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var storedName = id.ToString("N") + extension;
-        var path = Path.Combine(directory, storedName);
-        await using (var stream = File.Create(path)) await file.CopyToAsync(stream, ct);
+        var storedName = Path.GetFileName(file.FileName);
+        await using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        var data = stream.ToArray();
         var displayName = Path.GetFileNameWithoutExtension(file.FileName);
-        var record = await db.AddAssetAsync(type, displayName, storedName, NormalizeContentType(type, extension, file.ContentType), file.Length, ct);
+        var record = await db.AddAssetAsync(type, displayName, storedName, NormalizeContentType(type, extension, file.ContentType), data, ct);
         created.Add(record);
     }
     return Results.Ok(created);
@@ -221,10 +219,7 @@ assets.MapPost("/{type}", async (string type, HttpRequest request, AppDatabase d
 assets.MapDelete("/{id:guid}", async (Guid id, AppDatabase db, CancellationToken ct) =>
 {
     var asset = await db.DeleteAssetAsync(id, ct);
-    if (asset is null) return Results.NotFound();
-    var path = Path.Combine(db.AssetsDirectory, asset.Type, asset.FileName);
-    if (File.Exists(path)) File.Delete(path);
-    return Results.NoContent();
+    return asset is null ? Results.NotFound() : Results.NoContent();
 });
 
 var gallery = app.MapGroup("/api/documents").RequireAuthorization();

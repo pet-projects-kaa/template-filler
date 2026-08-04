@@ -153,15 +153,26 @@
   </div>
 </div>
 
-<div id="loginOverlay" class="overlay">
-  <form id="loginForm" class="login-card">
-    <div class="login-banner"><h2>Вход</h2></div>
+<div id="loginOverlay" class="overlay auth-overlay">
+  <form id="loginForm" class="login-card" autocomplete="on" novalidate>
+    <div class="login-banner">
+      <div class="login-logo">DS</div>
+      <h2>Вход</h2>
+      <p>Document Studio</p>
+    </div>
     <div class="login-body">
-      <input id="loginUsername" autocomplete="username" placeholder="Логин" required>
-      <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Пароль" required>
-      <label class="remember"><input id="loginRemember" type="checkbox" checked> Запомнить меня</label>
-      <div id="loginError" class="form-error"></div>
-      <button class="login-submit" type="submit">Войти</button>
+      <label class="login-field">
+        <span>Логин</span>
+        <input id="loginUsername" type="text" autocomplete="username" placeholder="01" required>
+      </label>
+      <label class="login-field">
+        <span>Пароль</span>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Введите пароль" required>
+      </label>
+      <label class="remember"><input id="loginRemember" type="checkbox" checked><span>Запомнить меня</span></label>
+      <div id="loginError" class="form-error" role="alert" aria-live="polite"></div>
+      <button id="loginSubmit" class="login-submit" type="submit">Войти</button>
+      <p class="login-hint">Начальный пользователь: <strong>01</strong></p>
     </div>
   </form>
 </div>

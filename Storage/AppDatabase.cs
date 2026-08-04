@@ -74,6 +74,7 @@ public sealed class AppDatabase
                     FileName TEXT NOT NULL,
                     ContentType TEXT NOT NULL,
                     Size INTEGER NOT NULL,
+                    Data BLOB NULL,
                     CreatedAt TEXT NOT NULL
                 );
 
@@ -93,6 +94,8 @@ public sealed class AppDatabase
                 CREATE INDEX IF NOT EXISTS IX_GalleryDocuments_CreatedAt ON GalleryDocuments (CreatedAt DESC);
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
+            await EnsureAssetDataColumnAsync(connection, cancellationToken);
+            await MigrateLegacyAssetFilesAsync(connection, cancellationToken);
             await SeedInitialUserAsync(connection, cancellationToken);
             await ImportLegacyTemplatesAsync(connection, cancellationToken);
             _initialized = true;
@@ -237,22 +240,48 @@ public sealed class AppDatabase
         return await reader.ReadAsync(cancellationToken) ? ReadAsset(reader) : null;
     }
 
-    public async Task<AssetRecord> AddAssetAsync(string type, string name, string fileName, string contentType, long size, CancellationToken cancellationToken)
+    public async Task<AssetRecord> AddAssetAsync(string type, string name, string fileName, string contentType, byte[] data, CancellationToken cancellationToken)
     {
         await EnsureInitializedAsync(cancellationToken);
-        var record = new AssetRecord(Guid.NewGuid(), type, name, fileName, contentType, size, DateTimeOffset.UtcNow);
+        var record = new AssetRecord(Guid.NewGuid(), type, name, fileName, contentType, data.LongLength, DateTimeOffset.UtcNow);
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO Assets (Id,Type,Name,FileName,ContentType,Size,CreatedAt) VALUES ($id,$type,$name,$file,$content,$size,$created);";
+        command.CommandText = "INSERT INTO Assets (Id,Type,Name,FileName,ContentType,Size,Data,CreatedAt) VALUES ($id,$type,$name,$file,$content,$size,$data,$created);";
         command.Parameters.AddWithValue("$id", record.Id.ToString("D"));
         command.Parameters.AddWithValue("$type", record.Type);
         command.Parameters.AddWithValue("$name", record.Name);
         command.Parameters.AddWithValue("$file", record.FileName);
         command.Parameters.AddWithValue("$content", record.ContentType);
         command.Parameters.AddWithValue("$size", record.Size);
+        command.Parameters.Add("$data", SqliteType.Blob).Value = data;
         command.Parameters.AddWithValue("$created", FormatDate(record.CreatedAt));
         await command.ExecuteNonQueryAsync(cancellationToken);
         return record;
+    }
+
+    public async Task<AssetBinaryRecord?> GetAssetBinaryAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id,Type,Name,FileName,ContentType,Size,CreatedAt,Data FROM Assets WHERE Id=$id;";
+        command.Parameters.AddWithValue("$id", id.ToString("D"));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        var metadata = ReadAsset(reader);
+        if (!reader.IsDBNull(7)) return new AssetBinaryRecord(metadata, (byte[])reader[7]);
+
+        var legacyPath = Path.Combine(AssetsDirectory, metadata.Type, metadata.FileName);
+        if (!File.Exists(legacyPath)) return null;
+        var data = await File.ReadAllBytesAsync(legacyPath, cancellationToken);
+        await reader.DisposeAsync();
+        await using var update = connection.CreateCommand();
+        update.CommandText = "UPDATE Assets SET Data=$data,Size=$size WHERE Id=$id;";
+        update.Parameters.Add("$data", SqliteType.Blob).Value = data;
+        update.Parameters.AddWithValue("$size", data.LongLength);
+        update.Parameters.AddWithValue("$id", id.ToString("D"));
+        await update.ExecuteNonQueryAsync(cancellationToken);
+        return new AssetBinaryRecord(metadata with { Size = data.LongLength }, data);
     }
 
     public async Task<AssetRecord?> DeleteAssetAsync(Guid id, CancellationToken cancellationToken)
@@ -319,6 +348,52 @@ public sealed class AppDatabase
         command.Parameters.AddWithValue("$id", id.ToString("D"));
         await command.ExecuteNonQueryAsync(cancellationToken);
         return document;
+    }
+
+    private static async Task EnsureAssetDataColumnAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var info = connection.CreateCommand();
+        info.CommandText = "PRAGMA table_info(Assets);";
+        var hasData = false;
+        await using (var reader = await info.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(reader.GetString(1), "Data", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasData = true;
+                    break;
+                }
+            }
+        }
+        if (hasData) return;
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE Assets ADD COLUMN Data BLOB NULL;";
+        await alter.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task MigrateLegacyAssetFilesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT Id,Type,FileName FROM Assets WHERE Data IS NULL;";
+        var pending = new List<(string Id, string Type, string FileName)>();
+        await using (var reader = await select.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+                pending.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        }
+        foreach (var item in pending)
+        {
+            var path = Path.Combine(AssetsDirectory, item.Type, item.FileName);
+            if (!File.Exists(path)) continue;
+            var data = await File.ReadAllBytesAsync(path, cancellationToken);
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE Assets SET Data=$data,Size=$size WHERE Id=$id;";
+            update.Parameters.Add("$data", SqliteType.Blob).Value = data;
+            update.Parameters.AddWithValue("$size", data.LongLength);
+            update.Parameters.AddWithValue("$id", item.Id);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)

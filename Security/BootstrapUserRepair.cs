@@ -6,7 +6,7 @@ public static class BootstrapUserRepair
 {
     private const string Username = "01";
     private const string InitialPassword = "pswd01";
-    private const string RepairMarkerFileName = ".bootstrap-user-repaired-v1";
+    private const string RepairMarkerFileName = ".bootstrap-user-repaired-v2";
 
     public static async Task EnsureAsync(IHostEnvironment environment, CancellationToken cancellationToken = default)
     {
